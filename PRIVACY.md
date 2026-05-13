@@ -88,7 +88,7 @@ If this privacy policy changes, the updated version will be published in this re
 
 ## Contact
 
-FitPR is an open-source project. If you have questions about this privacy policy, please open an issue on the [GitHub repository](https://github.com/yourusername/fitpr).
+FitPR is an open-source project. If you have questions about this privacy policy, please open an issue on the [GitHub repository](https://github.com/tinq777/fitpr).
 
 ---
 

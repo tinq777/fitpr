@@ -68,7 +68,7 @@ A minimal, offline-first Progressive Web App (PWA) for tracking workouts, sets, 
 1. Fork this repository
 2. Go to **Settings → Pages**
 3. Set source to `main` branch, `/ (root)`
-4. Your app will be live at `https://yourusername.github.io/fitpr`
+4. Your app will be live at `https://tinq777.github.io/fitpr`
 
 ### Option 2 — Open locally
 
