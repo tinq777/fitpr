@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0a0a0c"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="FitPR"/>
+  <meta name="description" content="FitPR — minimal fitness tracker with personal record tracking."/>
+  <title>FitPR</title>
+  <script>
+    const manifest = {
+      name:"FitPR", short_name:"FitPR", description:"Minimal fitness & PR tracker",
+      start_url:".", display:"standalone", background_color:"#0a0a0c", theme_color:"#0a0a0c",
+      icons:[{ src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23c8f542'/%3E%3Cpath d='M160 128v256M352 128v256M80 192h80M352 192h80M80 320h80M352 320h80M160 256h192' stroke='%230a0a0c' stroke-width='56' stroke-linecap='round'/%3E%3C/svg%3E", sizes:"any", type:"image/svg+xml" }]
+    };
+    const b = new Blob([JSON.stringify(manifest)],{type:"application/json"});
+    document.write('<link rel="manifest" href="'+URL.createObjectURL(b)+'">');
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:14px}
+    body{font-family:'DM Mono','Courier New',monospace;background:#0a0a0c;color:#f0f0f5;min-height:100dvh;overscroll-behavior:none}
+    input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+    input[type=number]{-moz-appearance:textfield}
+    ::-webkit-scrollbar{display:none}
+    button{font-family:inherit;cursor:pointer}
+    input{font-family:inherit}
+    #install-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:2000;background:#111114;border-top:1px solid #1e1e26;padding:14px 18px 28px;align-items:center;gap:12px}
+    #install-banner.show{display:flex}
+    .backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
+    .modal{background:#111114;border:1px solid #1e1e26;border-radius:14px;padding:24px 22px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+    #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(16px);background:#2ecc71;color:#0a0a0c;font-weight:800;font-size:12px;font-family:'DM Mono',monospace;padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:3000}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .tabs{display:flex;gap:3px;overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast"></div>
+<div id="install-banner">
+  <div style="flex:1">
+    <div style="font-weight:800;font-size:13px;color:#f0f0f5">Add to Home Screen</div>
+    <div style="font-size:11px;color:#6b6b7e;margin-top:2px">Install FitPR for offline access</div>
+  </div>
+  <button id="btn-dismiss" style="background:none;border:none;color:#6b6b7e;font-size:11px;padding:6px">Later</button>
+  <button id="btn-install" style="background:#c8f542;border:none;border-radius:8px;color:#0a0a0c;font-weight:800;font-size:12px;padding:8px 14px">Install</button>
+</div>
+
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ─── Palette ──────────────────────────────────────────────────────────────────
+const C = {
+  bg:"#0a0a0c", sur:"#111114", surH:"#18181d",
+  bdr:"#1e1e26", bdrL:"#2a2a36",
+  acc:"#c8f542", accD:"#9ab832", accF:"rgba(200,245,66,0.08)",
+  txt:"#f0f0f5", mut:"#6b6b7e", dim:"#3a3a4a",
+  red:"#ff4d4d", war:"#ff9f43", ice:"#48dbfb",
+  grn:"#2ecc71", grnF:"rgba(46,204,113,0.08)",
+  gld:"#ffd700",
+};
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+const I = {
+  bar:   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 5v14M18 5v14M2 8h4M18 8h4M2 16h4M18 16h4M6 12h12"/></svg>,
+  plus:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  trash: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>,
+  edit:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  tick:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  x:     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  fire:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 3z"/></svg>,
+  snow:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5l-5 5-5-5M7 19l5-5 5 5M2 12h20M5 7l5 5-5 5M19 7l-5 5 5 5"/></svg>,
+  stats: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  hist:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.54L1 10"/><line x1="12" y1="7" x2="12" y2="12"/><line x1="12" y1="12" x2="15" y2="14"/></svg>,
+  log:   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  warn:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+  info:  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+  book:  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  cal:   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  tgt:   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+  zap:   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  trphy: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="8 21 12 17 16 21"/><path d="M5 3H3v5a7 7 0 0014 0V3h-2"/><path d="M5 3h14M12 17v-4"/></svg>,
+  srch:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+let _seq = Date.now();
+const uid = () => (++_seq).toString(36);
+const STORE = "fitpr_v1";
+const load  = () => { try { const r=localStorage.getItem(STORE); return r?JSON.parse(r):null; } catch(e){ return null; } };
+const save  = d => { try { localStorage.setItem(STORE,JSON.stringify(d)); } catch(e){} };
+
+const fmtDate = ts => {
+  const d = new Date(ts);
+  return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})+" · "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+};
+const ago = ts => {
+  const m=Math.floor((Date.now()-ts)/60000);
+  if(m<1) return "just now";
+  if(m<60) return m+"m ago";
+  const h=Math.floor(m/60);
+  if(h<24) return h+"h ago";
+  return Math.floor(h/24)+"d ago";
+};
+const toast = msg => {
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2400);
+};
+
+// ─── Default factories ────────────────────────────────────────────────────────
+const mkSet  = (reps=10,load=0) => ({id:uid(),reps,load,done:false});
+const mkEx   = (name="")        => ({id:uid(),name,sets:[mkSet()],prevSets:[]});
+const mkWork = n => ({
+  id:uid(), title:`Workout ${n}`, sessions:[],
+  sections:{ warmup:[mkEx("Jumping Jacks")], exercises:[mkEx("Bench Press"),mkEx("Squat")], cooldown:[mkEx("Stretching")] }
+});
+const initState = () => {
+  const s = load();
+  if(s && s.workouts && s.workouts.length) return s;
+  return { workouts:[mkWork(1)], tab:"stats", prs:{}, weeklyGoal:4 };
+};
+
+// ─── PR helpers ───────────────────────────────────────────────────────────────
+const detectPRs = (sections, oldPRs) => {
+  const prs = {...oldPRs};
+  const hits = [];
+  for(const exs of Object.values(sections)){
+    for(const ex of exs){
+      if(!ex.name.trim()) continue;
+      const n = ex.name.trim();
+      const p = prs[n] || {bestLoad:0,bestReps:0,bestVol:0,date:null};
+      let changed=false;
+      for(const s of ex.sets){
+        const load=parseFloat(s.load)||0, reps=parseInt(s.reps)||0, vol=load*reps;
+        if(load>p.bestLoad){ p.bestLoad=load; changed=true; }
+        if(reps>p.bestReps){ p.bestReps=reps; changed=true; }
+        if(vol >p.bestVol ){ p.bestVol =vol;  changed=true; }
+      }
+      if(changed){ p.date=Date.now(); prs[n]=p; hits.push(n); }
+    }
+  }
+  return {prs,hits};
+};
+
+// ─── Exercise library ─────────────────────────────────────────────────────────
+const LIB = {
+  "Chest":[
+    {name:"Bench Press",            cues:["Retract and depress scapula","Bar to lower chest","Drive feet into floor"]},
+    {name:"Incline Bench Press",    cues:["30–45° incline targets upper chest","Elbows at 45° to torso","Control the descent"]},
+    {name:"Decline Bench Press",    cues:["Targets lower chest","Keep wrists stacked over elbows","Pause briefly at chest"]},
+    {name:"Dumbbell Fly",           cues:["Slight bend in elbows throughout","Wide arc, squeeze at top","Don't let elbows drop below bench"]},
+    {name:"Cable Fly",              cues:["Lean slightly forward","Maintain soft elbow bend","Bring hands together in an arc"]},
+    {name:"Push-Up",                cues:["Straight line from head to heels","Elbows at 45°","Full range — chest to floor"]},
+    {name:"Chest Dip",              cues:["Lean torso forward","Wide grip targets chest","Go until upper arms are parallel"]},
+    {name:"Pec Deck",               cues:["Keep back flat on pad","Squeeze at peak contraction","Slow controlled return"]},
+    {name:"Landmine Press",         cues:["Stagger stance for stability","Press at 45° angle","Rotate torso slightly at top"]},
+    {name:"Close-Grip Bench Press", cues:["Hands shoulder-width","Elbows stay tucked","Triceps do most of the work"]},
+  ],
+  "Back":[
+    {name:"Deadlift",               cues:["Bar over mid-foot","Hinge at hips, neutral spine","Drive floor away, lock out hips at top"]},
+    {name:"Barbell Row",            cues:["Hinge to ~45°","Pull bar to lower chest","Squeeze shoulder blades together"]},
+    {name:"Pull-Up",                cues:["Full hang at bottom","Pull elbows to hips","Chin clears the bar"]},
+    {name:"Lat Pulldown",           cues:["Slight lean back","Pull to upper chest","Stretch fully at top"]},
+    {name:"Seated Cable Row",       cues:["Keep torso upright","Pull handle to navel","Pause and squeeze at contraction"]},
+    {name:"Single-Arm Dumbbell Row",cues:["Support with same-side knee","Pull elbow straight back","Don't rotate the torso"]},
+    {name:"T-Bar Row",              cues:["Neutral spine","Drive elbows back","Full stretch at bottom"]},
+    {name:"Face Pull",              cues:["Cable at eye height","Pull to forehead, elbows high","External rotation at end"]},
+    {name:"Straight-Arm Pulldown",  cues:["Arms nearly straight","Hinge at shoulder only","Feel the lat stretch at top"]},
+    {name:"Rack Pull",              cues:["Bar set at knee height","Deadlift mechanics","Overload the top portion of pull"]},
+    {name:"Pendlay Row",            cues:["Bar returns to floor each rep","Torso parallel to ground","Explosive pull"]},
+  ],
+  "Shoulders":[
+    {name:"Overhead Press",         cues:["Bar starts at collarbone","Press in a slight arc","Glutes and core braced"]},
+    {name:"Dumbbell Shoulder Press",cues:["Dumbbells at ear level","Press straight up","Don't lock out aggressively"]},
+    {name:"Arnold Press",           cues:["Start with palms facing you","Rotate out as you press","Full range of motion"]},
+    {name:"Lateral Raise",          cues:["Slight bend in elbow","Lead with elbows not hands","Stop at shoulder height"]},
+    {name:"Front Raise",            cues:["Keep core tight","Raise to shoulder height","Avoid swinging"]},
+    {name:"Rear Delt Fly",          cues:["Hinge forward 45°","Wide arc, thumbs down","Squeeze rear delts at top"]},
+    {name:"Upright Row",            cues:["Grip slightly inside shoulder-width","Elbows flare above wrists","Pull to chin level"]},
+    {name:"Shrug",                  cues:["Straight up — no rolling","Hold 1s at top","Full depression at bottom"]},
+    {name:"Cable Lateral Raise",    cues:["Cable behind body","Constant tension throughout","Don't lean away"]},
+    {name:"Push Press",             cues:["Slight knee dip","Explode with legs","Lock out overhead"]},
+  ],
+  "Legs":[
+    {name:"Squat",                  cues:["Feet shoulder-width, toes out","Break at hips and knees together","Depth: crease of hip below knee"]},
+    {name:"Front Squat",            cues:["Elbows high, upright torso","Knees track toes","Core braced throughout"]},
+    {name:"Leg Press",              cues:["Feet hip-width on platform","Don't lock knees at top","Full range — no half reps"]},
+    {name:"Romanian Deadlift",      cues:["Hinge at hips, soft knees","Bar stays close to body","Feel hamstring stretch at bottom"]},
+    {name:"Bulgarian Split Squat",  cues:["Rear foot elevated","Front foot far enough forward","Back knee tracks down, not out"]},
+    {name:"Leg Extension",          cues:["Pause at full extension","Slow on the way down","Toes neutral or slightly in"]},
+    {name:"Leg Curl",               cues:["Hips stay on pad","Full curl to glutes","Slow eccentric"]},
+    {name:"Standing Calf Raise",    cues:["Full stretch at bottom","Pause at top","Don't bounce"]},
+    {name:"Seated Calf Raise",      cues:["Knee at 90°","Full range of motion","Hold contraction at top"]},
+    {name:"Hip Thrust",             cues:["Bar over hip crease","Drive through heels","Full hip extension at top"]},
+    {name:"Hack Squat",             cues:["Feet low on platform for quads","Control the descent","Don't let knees cave"]},
+    {name:"Walking Lunge",          cues:["Long stride","Front knee over ankle","Upright torso"]},
+    {name:"Goblet Squat",           cues:["Hold weight at chest","Elbows inside knees at bottom","Heels on floor"]},
+  ],
+  "Arms":[
+    {name:"Barbell Curl",           cues:["Elbows pinned at sides","Full extension at bottom","Squeeze at top"]},
+    {name:"Dumbbell Curl",          cues:["Supinate at top","Don't swing body","Slow on the way down"]},
+    {name:"Hammer Curl",            cues:["Neutral grip throughout","Elbows stay still","Targets brachialis"]},
+    {name:"Preacher Curl",          cues:["Upper arm flat on pad","Full extension at bottom","Controlled tempo"]},
+    {name:"Cable Curl",             cues:["Constant tension","Elbows forward slightly at top","Squeeze hard at peak"]},
+    {name:"Skull Crusher",          cues:["Lower bar to forehead","Elbows stay vertical","Press back to start"]},
+    {name:"Tricep Pushdown",        cues:["Elbows at sides","Lock out fully","Slow return to 90°"]},
+    {name:"Overhead Tricep Ext.",   cues:["Upper arms close to head","Full stretch at bottom","Press to full lock-out"]},
+    {name:"Dips",                   cues:["Lean forward for chest, upright for triceps","Lower until upper arms parallel","Drive through hands to lock out"]},
+    {name:"Concentration Curl",     cues:["Elbow on inner thigh","Full extension","Slow squeeze at top"]},
+    {name:"Spider Curl",            cues:["Chest on angled bench","Arms hang straight down","Curl without swinging"]},
+  ],
+  "Core":[
+    {name:"Plank",                  cues:["Straight line head to heels","Don't let hips sag","Breathe steadily"]},
+    {name:"Crunch",                 cues:["Lower back stays on floor","Exhale on the way up","Don't pull on neck"]},
+    {name:"Leg Raise",              cues:["Lower back pressed to floor","Legs together","Lower slowly without touching floor"]},
+    {name:"Cable Crunch",           cues:["Hips stay still","Round spine on the way down","Squeeze abs at bottom"]},
+    {name:"Ab Wheel Rollout",       cues:["Start on knees","Hips stay level","Pull abs in as you return"]},
+    {name:"Russian Twist",          cues:["Feet off floor for harder version","Rotate from torso","Touch floor each side"]},
+    {name:"Side Plank",             cues:["Hips stacked","Don't let hip drop","Hold or pulse"]},
+    {name:"Hanging Knee Raise",     cues:["Dead hang to start","Tuck knees to chest","Control the lowering"]},
+    {name:"Pallof Press",           cues:["Cable at chest height","Press straight out, resist rotation","Core stays square"]},
+  ],
+  "Cardio":[
+    {name:"Treadmill Run",          cues:["Upright posture","Land mid-foot","Arms relaxed at 90°"]},
+    {name:"Cycling",                cues:["Saddle at hip height","Slight bend in knee at bottom","Smooth pedal stroke"]},
+    {name:"Rowing Machine",         cues:["Legs · body · arms on drive","Arms · body · legs on recovery","Keep core braced"]},
+    {name:"Jump Rope",              cues:["Land softly on balls of feet","Wrists do the turning","Keep jumps low"]},
+    {name:"Assault Bike",           cues:["Push and pull handles equally","Stay in the seat for aerobic work","Upright posture"]},
+    {name:"Battle Ropes",           cues:["Hinge at hips slightly","Arms alternate or together","Breathe rhythmically"]},
+    {name:"Box Jump",               cues:["Land softly in squat position","Full hip extension at top","Step down — don't jump down"]},
+    {name:"Burpee",                 cues:["Plank position — don't sag","Explosive jump at top","Control the floor transition"]},
+    {name:"Sled Push",              cues:["Low angle push","Drive with legs","Short powerful steps"]},
+  ],
+  "Warm-Up":[
+    {name:"Jumping Jacks",          cues:["Land softly","Arms fully overhead","Steady rhythm"]},
+    {name:"High Knees",             cues:["Drive knee to hip height","Stay on balls of feet","Pump arms"]},
+    {name:"Arm Circles",            cues:["Full range — both directions","Shoulders relaxed","Progress to larger circles"]},
+    {name:"Hip Circles",            cues:["Hands on hips","Large slow circles","Both directions"]},
+    {name:"Leg Swings",             cues:["Hold wall for balance","Swing through full range","Keep torso still"]},
+    {name:"Cat-Cow Stretch",        cues:["On hands and knees","Exhale to arch, inhale to dip","Move with breath"]},
+    {name:"World's Greatest Stretch",cues:["Lunge forward, elbow to floor","Rotate open arm to ceiling","Hold 2s each side"]},
+    {name:"Inchworm",               cues:["Walk hands out to plank","Keep legs straight","Walk feet to hands"]},
+    {name:"Dynamic Lunge",          cues:["Step forward, knee to 90°","Drive back to standing","Alternate legs"]},
+    {name:"Foam Roll",              cues:["Slow rolls — 1 inch per second","Pause on tight spots","Breathe into tension"]},
+    {name:"Band Pull-Apart",        cues:["Arms straight at shoulder height","Pull band to chest","Squeeze shoulder blades"]},
+  ],
+  "Cool Down":[
+    {name:"Quad Stretch",           cues:["Stand on one leg","Pull heel to glute","Keep knees together"]},
+    {name:"Hamstring Stretch",      cues:["Straight leg, hinge forward","Feel stretch behind knee","Don't round back"]},
+    {name:"Hip Flexor Stretch",     cues:["Low lunge position","Tuck pelvis under","Hold 30–60s each side"]},
+    {name:"Chest Stretch",          cues:["Arms wide, doorway or wall","Open chest forward","Gentle hold, no bouncing"]},
+    {name:"Seated Forward Fold",    cues:["Legs straight, hinge from hips","Reach toward feet","Relax neck"]},
+    {name:"Pigeon Pose",            cues:["Front shin parallel to mat","Square hips forward","Fold forward to deepen"]},
+    {name:"Calf Stretch",           cues:["Heel flat on floor","Lean into wall","Straight leg targets gastrocnemius"]},
+    {name:"Child's Pose",           cues:["Arms extended or by sides","Forehead to floor","Breathe into lower back"]},
+    {name:"Spinal Twist",           cues:["Lie on back, knee to floor","Arm out, look opposite","Shoulders stay flat"]},
+  ],
+  "Mobility":[
+    {name:"Half Kneeling Ankle Glide",          cues:["Back knee on floor, front foot flat","Drive front knee over little toe","Keep heel grounded throughout"]},
+    {name:"Wall Anterior Tibialis Raise",        cues:["Stand with heels against wall","Lift toes as high as possible","Slow controlled lowering"]},
+    {name:"90/90 Hip Switch",                    cues:["Sit with both legs at 90°","Rotate hips side to side with control","Keep spine tall, don't collapse forward"]},
+    {name:"Quadruped Heel Sit T-Spine Rotation", cues:["Start in quadruped, sit back toward heels","Place one hand behind head","Rotate elbow to ceiling, follow with eyes"]},
+    {name:"Hooklying Breathing",                 cues:["Lie on back, knees bent, feet flat","Breathe into ribcage 360°","Exhale fully, let ribs close down"]},
+    {name:"Leaning Wall Double Leg Calf Raise",  cues:["Lean into wall at 45°, hands flat","Rise onto balls of both feet together","Slow 3-second lower, full range"]},
+    {name:"Deep Squat Hold",                     cues:["Feet shoulder-width, toes out","Use doorframe for support if needed","Chest up, breathe into hips"]},
+    {name:"Thoracic Extension over Foam Roller", cues:["Roller perpendicular to spine at mid-back","Arms crossed or hands behind head","Exhale and let upper back open over roller"]},
+    {name:"Cat-Cow",                             cues:["Hands under shoulders, knees under hips","Inhale to arch (cow), exhale to round (cat)","Move slowly, segment by segment"]},
+    {name:"Kneeling Hip Flexor Stretch",         cues:["Rear knee on pad, front foot forward","Tuck pelvis under posteriorly","Reach same-arm overhead to increase stretch"]},
+    {name:"Shoulder CARs",                       cues:["Keep scapula still, move arm only","Full circle in both directions","Slow and controlled — no momentum"]},
+    {name:"Ankle CARs",                          cues:["Seated or standing on one leg","Full circle through entire ankle range","Both directions, 5 reps each"]},
+    {name:"Prone Press-Up",                      cues:["Lie face down, hands under shoulders","Press chest up, hips stay on floor","Breathe out at top, no glute squeeze"]},
+    {name:"Side-Lying Thoracic Rotation",        cues:["Hips and knees at 90°, knees stacked","Top arm reaches across body","Rotate shoulder to floor, follow with eyes"]},
+    {name:"Wall Ankle Mobilisation",             cues:["Front foot close to wall, drive knee to wall","Keep heel flat on floor","5–10 slow reps each side"]},
+  ],
+  "Conditioning":[
+    {name:"Squat Jump",             cues:["Feet shoulder-width","Squat to parallel then drive vertically","Land with soft knees, absorb through hips"]},
+    {name:"Goblet Reverse Lunge",   cues:["Hold weight at chest","Step back, lower rear knee near floor","Drive through front heel to return"]},
+    {name:"Kettlebell Swing",       cues:["Hinge — not squat","Drive hips forward explosively","Bell floats to shoulder height on power alone"]},
+    {name:"Farmers Carry",          cues:["Weights at sides, shoulders packed","Walk tall — no lateral sway","Grip tight, breathe steadily"]},
+    {name:"Medicine Ball Slam",     cues:["Reach fully overhead","Slam through the ball — use your whole body","Catch the bounce and repeat with control"]},
+    {name:"Sandbag Clean",          cues:["Hip hinge to load, explosive hip extension","Pull bag close to body","Receive in front rack or bear hug position"]},
+    {name:"Tuck Jump",              cues:["Jump and drive knees to chest","Land softly, immediately reload","Keep torso upright throughout"]},
+    {name:"Lateral Bound",          cues:["Push off outside foot","Land on opposite foot, control the landing","Pause 1s before next rep"]},
+    {name:"Bear Crawl",             cues:["Knees hover 2 inches off floor","Opposite arm and leg move together","Keep hips level — no rocking"]},
+    {name:"Broad Jump",             cues:["Swing arms back then forward for momentum","Jump as far forward as possible","Land with soft knees, hold the landing"]},
+    {name:"Step-Up",                cues:["Drive through heel of working leg","Don't push off back foot","Stand fully tall at top before lowering"]},
+    {name:"Prowler Sprint",         cues:["Low aggressive push angle","Drive from the balls of your feet","Stay long and low throughout"]},
+  ],
+};
+
+const getCues = name => {
+  for(const exs of Object.values(LIB)){
+    const f = exs.find(e=>e.name===name);
+    if(f) return f.cues;
+  }
+  return null;
+};
+const ytURL = name => `https://www.youtube.com/results?search_query=${encodeURIComponent(name+" exercise form tutorial")}`;
+
+// ─── Components ───────────────────────────────────────────────────────────────
+
+const Inp = ({value,onChange,style={},...p}) => (
+  <input value={value} onChange={e=>onChange(e.target.value)}
+    style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:6,color:C.txt,padding:"5px 9px",fontSize:13,outline:"none",width:"100%",fontFamily:"inherit",transition:"border-color .15s",...style}}
+    onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr} {...p}/>
+);
+
+const Stepper = ({value,onChange,step=1,min=0,label=""}) => {
+  const v=parseFloat(value)||0;
+  const bs={background:C.surH,border:`1px solid ${C.bdr}`,borderRadius:5,color:C.mut,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s",padding:0,fontSize:14,fontWeight:700};
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:4}}>
+      <button style={bs}
+        onMouseEnter={e=>{e.currentTarget.style.borderColor=C.acc;e.currentTarget.style.color=C.acc}}
+        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}
+        onClick={()=>onChange(Math.max(min,parseFloat((v-step).toFixed(2))))}>−</button>
+      <div style={{textAlign:"center",minWidth:38,fontSize:13,fontWeight:700,color:C.txt}}>{v}{label}</div>
+      <button style={bs}
+        onMouseEnter={e=>{e.currentTarget.style.borderColor=C.acc;e.currentTarget.style.color=C.acc}}
+        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}
+        onClick={()=>onChange(parseFloat((v+step).toFixed(2)))}>+</button>
+    </div>
+  );
+};
+
+const SetRow = ({set,idx,prevSet,isPR,onChange,onDelete}) => {
+  const done=!!set.done;
+  const ldiff = prevSet!=null ? parseFloat(set.load||0)-parseFloat(prevSet.load||0) : null;
+  const rdiff = prevSet!=null ? parseInt(set.reps||0)-parseInt(prevSet.reps||0)     : null;
+  return (
+    <div style={{marginBottom:8}}>
+      {prevSet && (
+        <div style={{display:"flex",gap:12,marginBottom:3,paddingLeft:28}}>
+          <span style={{fontSize:9,color:C.dim}}>prev: <span style={{color:C.mut}}>{prevSet.reps} reps</span>
+            {rdiff!==0&&<span style={{color:rdiff>0?C.grn:C.red,marginLeft:3}}>{rdiff>0?"+"+rdiff:rdiff}</span>}
+          </span>
+          <span style={{fontSize:9,color:C.dim}}>prev: <span style={{color:C.mut}}>{prevSet.load}kg</span>
+            {ldiff!==0&&<span style={{color:ldiff>0?C.grn:C.red,marginLeft:3}}>{ldiff>0?"+"+ldiff:ldiff}kg</span>}
+          </span>
+        </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",gap:6,background:done?"rgba(46,204,113,0.06)":"transparent",border:done?`1px solid ${C.grn}33`:"1px solid transparent",borderRadius:8,padding:done?"6px 8px":"2px 0",transition:"all .2s"}}>
+        <span style={{color:done?C.grn:C.mut,fontSize:10,fontWeight:700,width:18,textAlign:"center",flexShrink:0,transition:"color .2s"}}>{idx+1}</span>
+        <Stepper value={set.reps} step={1} min={0} onChange={v=>onChange({...set,reps:v})}/>
+        <span style={{color:C.dim,fontSize:10,flexShrink:0}}>×</span>
+        <Stepper value={set.load} step={1} min={0} label="kg" onChange={v=>onChange({...set,load:v})}/>
+        <div style={{flex:1}}/>
+        {isPR && <span title="Personal Record!" style={{fontSize:13,flexShrink:0}}>🏆</span>}
+        <button onClick={()=>onChange({...set,done:!done})} title={done?"Mark incomplete":"Mark done"}
+          style={{background:done?C.grn:"transparent",border:`1px solid ${done?C.grn:C.bdr}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s",color:done?"#0a0a0c":C.dim}}
+          onMouseEnter={e=>{if(!done){e.currentTarget.style.borderColor=C.grn;e.currentTarget.style.color=C.grn}}}
+          onMouseLeave={e=>{if(!done){e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.dim}}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+        <button onClick={onDelete} style={{background:"none",border:"none",color:C.dim,padding:3,display:"flex",alignItems:"center",transition:"color .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>
+          {I.x}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const FormCues = ({name}) => {
+  const [open,setOpen]=useState(false);
+  const cues=getCues(name);
+  if(!name) return null;
+  return (
+    <div style={{marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        {cues && (
+          <button onClick={()=>setOpen(!open)}
+            style={{background:"none",border:`1px solid ${open?C.ice+"88":C.bdr}`,borderRadius:6,color:open?C.ice:C.mut,fontSize:10,fontWeight:700,padding:"3px 8px",display:"flex",alignItems:"center",gap:4,transition:"all .15s"}}>
+            {I.info} {open?"Hide cues":"Form cues"}
+          </button>
+        )}
+        <a href={ytURL(name)} target="_blank" rel="noopener noreferrer"
+          style={{background:"none",border:`1px solid ${C.bdr}`,borderRadius:6,color:C.mut,fontSize:10,fontWeight:700,padding:"3px 8px",display:"flex",alignItems:"center",gap:4,textDecoration:"none",transition:"all .15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor="#ff4444";e.currentTarget.style.color="#ff4444"}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-1.3C16.1 2.8 12 2.8 12 2.8s-4.1 0-6.8.1c-.6.1-1.9.1-3 1.3C1.3 5 1 7 1 7S.7 9.1.7 11.2v2c0 2 .3 4.1.3 4.1s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 21.4 12 21.5 12 21.5s4.1 0 6.8-.2c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.1.3-4.1v-2C23.3 9.1 23 7 23 7zm-13.5 8.3V8.8l8 3.3-8 3.2z"/></svg>
+          Watch
+        </a>
+      </div>
+      {open && cues && (
+        <div style={{marginTop:8,background:`${C.ice}0d`,border:`1px solid ${C.ice}33`,borderRadius:8,padding:"10px 12px"}}>
+          {cues.map((c,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:i<cues.length-1?6:0}}>
+              <span style={{color:C.ice,fontSize:10,fontWeight:800,flexShrink:0,marginTop:1}}>{i+1}.</span>
+              <span style={{color:C.txt,fontSize:11,lineHeight:1.5}}>{c}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ExCard = ({exercise,onChange,onDelete,prs}) => {
+  const [col,setCol]=useState(false);
+  const updSet=(i,u)=>onChange({...exercise,sets:exercise.sets.map((s,j)=>j===i?u:s)});
+  const delSet=i=>onChange({...exercise,sets:exercise.sets.filter((_,j)=>j!==i)});
+  const addSet=()=>{
+    const last=exercise.sets[exercise.sets.length-1]||{reps:10,load:0};
+    onChange({...exercise,sets:[...exercise.sets,mkSet(last.reps,last.load)]});
+  };
+  const prev=exercise.prevSets||[];
+  const done=exercise.sets.filter(s=>s.done).length;
+  const all=exercise.sets.length>0&&done===exercise.sets.length;
+  const exPR=prs&&exercise.name?prs[exercise.name.trim()]:null;
+  const isPR=s=>{
+    if(!exPR) return false;
+    const l=parseFloat(s.load)||0,r=parseInt(s.reps)||0;
+    return (l>0&&l>=exPR.bestLoad)||(r>0&&r>=exPR.bestReps);
+  };
+  return (
+    <div style={{background:C.sur,border:`1px solid ${all?C.grn+"55":C.bdr}`,borderRadius:10,padding:"12px 14px",marginBottom:8,transition:"border-color .3s"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:col?0:10}}>
+        <Inp value={exercise.name} onChange={v=>onChange({...exercise,name:v})} placeholder="Exercise name"
+          style={{fontWeight:600,fontSize:13,background:"transparent",border:"none",borderBottom:`1px solid ${C.bdr}`,borderRadius:0,padding:"3px 0"}}
+          onFocus={e=>e.target.style.borderBottomColor=C.acc} onBlur={e=>e.target.style.borderBottomColor=C.bdr}/>
+        {exercise.sets.length>0&&(
+          <span style={{fontSize:9,fontWeight:800,borderRadius:20,padding:"2px 8px",flexShrink:0,background:all?C.grn:C.accF,color:all?"#0a0a0c":C.accD,border:`1px solid ${all?C.grn:C.accD+"44"}`,transition:"all .3s"}}>
+            {done}/{exercise.sets.length}
+          </span>
+        )}
+        <button onClick={()=>setCol(!col)} style={{background:"none",border:"none",color:C.mut,padding:4,fontSize:10}}>{col?"▾":"▴"}</button>
+        <button onClick={onDelete} style={{background:"none",border:"none",color:C.dim,padding:4,display:"flex",transition:"color .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
+      </div>
+      {!col && (
+        <>
+          <FormCues name={exercise.name}/>
+          {prev.length>0&&(
+            <div style={{fontSize:9,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6,paddingLeft:28}}>↑ prev session</div>
+          )}
+          {exercise.sets.map((s,i)=>(
+            <SetRow key={s.id} set={s} idx={i} prevSet={prev[i]||null} isPR={isPR(s)}
+              onChange={u=>updSet(i,u)} onDelete={()=>delSet(i)}/>
+          ))}
+          <button onClick={addSet} style={{background:C.accF,border:`1px dashed ${C.accD}`,borderRadius:6,color:C.accD,fontSize:11,fontWeight:600,padding:"5px 10px",marginTop:4,display:"flex",alignItems:"center",gap:5}}>
+            {I.plus} Add set
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+const Section = ({label,icon,color,exercises,onChange,onAdd,onLib,onDel,prs}) => (
+  <div style={{marginBottom:24}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+      <span style={{color}}>{icon}</span>
+      <span style={{color,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:2}}>{label}</span>
+      <div style={{flex:1,height:1,background:`${color}22`}}/>
+    </div>
+    {exercises.map(ex=>(
+      <ExCard key={ex.id} exercise={ex} prs={prs}
+        onChange={u=>onChange(exercises.map(e=>e.id===ex.id?u:e))}
+        onDelete={()=>onDel(ex.id)}/>
+    ))}
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={onLib}
+        style={{flex:1,background:C.accF,border:`1px solid ${C.accD}44`,borderRadius:8,color:C.accD,fontSize:11,fontWeight:700,padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s"}}
+        onMouseEnter={e=>{e.currentTarget.style.borderColor=C.acc;e.currentTarget.style.color=C.acc}}
+        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.accD+"44";e.currentTarget.style.color=C.accD}}>
+        {I.plus} Add Exercise
+      </button>
+      <button onClick={onAdd}
+        style={{flex:1,background:"transparent",border:`1px dashed ${C.bdr}`,borderRadius:8,color:C.mut,fontSize:11,fontWeight:600,padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s"}}
+        onMouseEnter={e=>{e.currentTarget.style.borderColor=color;e.currentTarget.style.color=color}}
+        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}>
+        {I.plus} Custom
+      </button>
+    </div>
+  </div>
+);
+
+const Picker = ({onSelect,onClose}) => {
+  const [q,setQ]=useState("");
+  const [grp,setGrp]=useState("Chest");
+  const ref=useRef();
+  useEffect(()=>{ref.current?.focus()},[]);
+  const groups=Object.keys(LIB);
+  const items=q.trim()
+    ? Object.entries(LIB).flatMap(([g,exs])=>exs.filter(e=>e.name.toLowerCase().includes(q.toLowerCase())).map(e=>({e,g})))
+    : LIB[grp].map(e=>({e,g:grp}));
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <div className="modal" onClick={ev=>ev.stopPropagation()} style={{maxWidth:380,maxHeight:"82vh",display:"flex",flexDirection:"column",padding:0,overflow:"hidden"}}>
+        <div style={{padding:"16px 16px 0",borderBottom:`1px solid ${C.bdr}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <span style={{fontSize:14,fontWeight:800,color:C.txt}}>Exercise Library</span>
+            <button onClick={onClose} style={{background:"none",border:"none",color:C.mut,padding:4,display:"flex"}}>{I.x}</button>
+          </div>
+          <div style={{position:"relative",marginBottom:12}}>
+            <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:C.mut,pointerEvents:"none"}}>{I.srch}</span>
+            <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search exercises…"
+              style={{width:"100%",background:C.surH,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"7px 10px 7px 30px",fontSize:12,outline:"none",fontFamily:"inherit"}}
+              onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr}/>
+          </div>
+          {!q.trim()&&(
+            <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:12,scrollbarWidth:"none"}}>
+              {groups.map(g=>(
+                <button key={g} onClick={()=>setGrp(g)}
+                  style={{background:grp===g?C.acc:"transparent",color:grp===g?"#0a0a0c":C.mut,border:`1px solid ${grp===g?C.acc:C.bdr}`,borderRadius:20,padding:"4px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s"}}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{overflowY:"auto",flex:1,padding:"8px 12px 16px"}}>
+          {items.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:C.mut,fontSize:12}}>No exercises found</div>}
+          {items.map(({e,g})=>(
+            <button key={e.name} onClick={()=>{onSelect(e.name);onClose()}}
+              style={{width:"100%",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"10px 12px",marginBottom:5,display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,fontWeight:600,transition:"all .15s",textAlign:"left"}}
+              onMouseEnter={ev=>{ev.currentTarget.style.borderColor=C.acc;ev.currentTarget.style.background=C.accF}}
+              onMouseLeave={ev=>{ev.currentTarget.style.borderColor=C.bdr;ev.currentTarget.style.background="transparent"}}>
+              <span>{e.name}</span>
+              <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0}}>
+                {e.cues&&<span style={{fontSize:9,color:C.ice,background:`${C.ice}15`,borderRadius:20,padding:"2px 7px"}}>cues</span>}
+                {q.trim()&&<span style={{fontSize:9,color:C.mut,background:C.surH,borderRadius:20,padding:"2px 8px"}}>{g}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SessHistory = ({sessions,onDelete}) => {
+  const [open,setOpen]=useState(false);
+  if(!sessions.length) return null;
+  return (
+    <div style={{marginBottom:22}}>
+      <button onClick={()=>setOpen(!open)}
+        style={{background:"none",border:"none",color:C.mut,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,display:"flex",alignItems:"center",gap:6,padding:0}}>
+        {I.hist} Session Log ({sessions.length}) <span style={{color:C.dim}}>{open?"▴":"▾"}</span>
+      </button>
+      {open&&(
+        <div style={{marginTop:10}}>
+          {[...sessions].reverse().map((s,i)=>(
+            <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:i===0?C.grnF:C.sur,border:`1px solid ${i===0?C.grn+"44":C.bdr}`,borderRadius:8,marginBottom:5}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:i===0?C.grn:C.dim,flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,color:i===0?C.grn:C.txt,fontWeight:i===0?700:400}}>{fmtDate(s.ts)}</div>
+                <div style={{fontSize:10,color:C.mut,marginTop:1}}>{ago(s.ts)}</div>
+              </div>
+              {i===0&&<span style={{fontSize:9,fontWeight:800,background:C.grn,color:"#0a0a0c",borderRadius:20,padding:"2px 8px"}}>LATEST</span>}
+              <button onClick={()=>onDelete(s.id)} style={{background:"none",border:"none",color:C.dim,padding:3,display:"flex",transition:"color .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DelModal = ({title,sc,onConfirm,onCancel}) => (
+  <div className="backdrop" onClick={onCancel}>
+    <div className="modal" onClick={e=>e.stopPropagation()}>
+      <div style={{width:44,height:44,borderRadius:10,background:"rgba(255,77,77,.1)",border:"1px solid rgba(255,77,77,.25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff4d4d" strokeWidth="2" strokeLinecap="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+        </svg>
+      </div>
+      <div style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:8}}>Delete workout?</div>
+      <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:sc>0?10:22}}>
+        <span style={{color:C.txt,fontWeight:700}}>"{title}"</span> and all its exercises will be permanently removed.
+      </div>
+      {sc>0&&(
+        <div style={{background:"rgba(255,77,77,.07)",border:"1px solid rgba(255,77,77,.2)",borderRadius:8,padding:"8px 12px",marginBottom:22,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{color:C.red}}>{I.warn}</span>
+          <span style={{fontSize:11,color:C.red,fontWeight:600}}>{sc} logged session{sc!==1?"s":""} will also be lost.</span>
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button onClick={onCancel}
+          style={{background:C.surH,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.mut,fontSize:12,fontWeight:700,padding:"10px",transition:"all .15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=C.bdrL;e.currentTarget.style.color=C.txt}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}>
+          Cancel
+        </button>
+        <button onClick={onConfirm}
+          style={{background:C.red,border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:800,padding:"10px",transition:"opacity .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.opacity=".85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const Ring = ({pct,size=76,stroke=7,color=C.acc,children}) => {
+  const r=(size-stroke)/2, ci=2*Math.PI*r;
+  return (
+    <div style={{position:"relative",width:size,height:size}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.bdr} strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={ci} strokeDashoffset={ci*(1-pct)} strokeLinecap="round" style={{transition:"stroke-dashoffset .6s ease"}}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</div>
+    </div>
+  );
+};
+
+// ─── Workout Tab ──────────────────────────────────────────────────────────────
+const WorkoutTab = ({workout,onChange,onDelete,prs,onPRUpdate}) => {
+  const [editTitle,setEditTitle]=useState(false);
+  const [logged,setLogged]=useState(false);
+  const [delModal,setDelModal]=useState(false);
+  const [picker,setPicker]=useState(null);
+  const titleRef=useRef();
+  useEffect(()=>{if(editTitle)titleRef.current?.focus()},[editTitle]);
+
+  const updSec=(sec,exs)=>onChange({...workout,sections:{...workout.sections,[sec]:exs}});
+  const addEx=sec=>updSec(sec,[...workout.sections[sec],mkEx()]);
+  const addLib=(sec,name)=>updSec(sec,[...workout.sections[sec],mkEx(name)]);
+  const delEx=(sec,id)=>updSec(sec,workout.sections[sec].filter(e=>e.id!==id));
+
+  const logSession=()=>{
+    const {prs:newPRs,hits}=detectPRs(workout.sections,prs);
+    onPRUpdate(newPRs);
+    const snap={};
+    for(const [sec,exs] of Object.entries(workout.sections)){
+      snap[sec]=exs.map(ex=>({...ex,prevSets:ex.sets.map(s=>({reps:s.reps,load:s.load})),sets:ex.sets.map(s=>({...s,done:false}))}));
+    }
+    onChange({...workout,sections:snap,sessions:[...workout.sessions,{id:uid(),ts:Date.now()}]});
+    setLogged(true);
+    toast(hits.length>0?"🏆 New PR"+(hits.length>1?"s":"")+"! "+hits.slice(0,2).join(", ")+(hits.length>2?" +"+(hits.length-2)+" more":""):"Session logged ✓");
+    setTimeout(()=>setLogged(false),2500);
+  };
+  const delSess=sid=>onChange({...workout,sessions:workout.sessions.filter(s=>s.id!==sid)});
+
+  const totalSets=Object.values(workout.sections).flat().reduce((a,e)=>a+e.sets.length,0);
+  const totalEx=Object.values(workout.sections).flat().length;
+  const count=workout.sessions.length;
+  const last=count>0?workout.sessions[workout.sessions.length-1]:null;
+
+  return (
+    <div>
+      {delModal&&<DelModal title={workout.title} sc={count} onConfirm={onDelete} onCancel={()=>setDelModal(false)}/>}
+      {picker&&<Picker onSelect={n=>addLib(picker,n)} onClose={()=>setPicker(null)}/>}
+
+      {/* Title */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+        {editTitle
+          ? <input ref={titleRef} value={workout.title} onChange={e=>onChange({...workout,title:e.target.value})}
+              onBlur={()=>setEditTitle(false)} onKeyDown={e=>e.key==="Enter"&&setEditTitle(false)}
+              style={{background:"transparent",border:"none",borderBottom:`2px solid ${C.acc}`,color:C.txt,fontSize:20,fontWeight:800,outline:"none",fontFamily:"inherit",flex:1,paddingBottom:2}}/>
+          : <h2 onClick={()=>setEditTitle(true)} style={{margin:0,fontSize:20,fontWeight:800,color:C.txt,cursor:"pointer",flex:1}}>{workout.title}</h2>
+        }
+        <button onClick={()=>setEditTitle(!editTitle)} style={{background:"none",border:"none",color:editTitle?C.acc:C.mut,padding:6,display:"flex"}}>
+          {editTitle?I.tick:I.edit}
+        </button>
+        <button onClick={()=>setDelModal(true)} style={{background:"none",border:"none",color:C.dim,padding:6,display:"flex",transition:"color .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
+      </div>
+
+      {/* Quick stats */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:18}}>
+        {[{l:"Exercises",v:totalEx,c:C.acc},{l:"Sets",v:totalSets,c:C.war},{l:"Sessions",v:count,c:C.grn}].map(s=>(
+          <div key={s.l} style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,padding:"10px 12px"}}>
+            <div style={{color:C.mut,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>{s.l}</div>
+            <div style={{color:s.c,fontSize:22,fontWeight:800,marginTop:3}}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {last&&(
+        <div style={{background:C.grnF,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"9px 12px",marginBottom:18,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{color:C.grn}}>{I.hist}</span>
+          <span style={{color:C.grn,fontSize:11,fontWeight:600}}>Last completed {ago(last.ts)}</span>
+        </div>
+      )}
+
+      <SessHistory sessions={workout.sessions} onDelete={delSess}/>
+
+      <Section label="Warm-Up"   icon={I.fire} color={C.war} prs={prs}
+        exercises={workout.sections.warmup}    onChange={ex=>updSec("warmup",ex)}
+        onAdd={()=>addEx("warmup")}    onLib={()=>setPicker("warmup")}    onDel={id=>delEx("warmup",id)}/>
+      <Section label="Exercises" icon={I.bar}  color={C.acc} prs={prs}
+        exercises={workout.sections.exercises} onChange={ex=>updSec("exercises",ex)}
+        onAdd={()=>addEx("exercises")} onLib={()=>setPicker("exercises")} onDel={id=>delEx("exercises",id)}/>
+      <Section label="Cool Down" icon={I.snow} color={C.ice} prs={prs}
+        exercises={workout.sections.cooldown}  onChange={ex=>updSec("cooldown",ex)}
+        onAdd={()=>addEx("cooldown")}  onLib={()=>setPicker("cooldown")}  onDel={id=>delEx("cooldown",id)}/>
+
+      <button onClick={logSession}
+        style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:logged?C.grn:C.acc,color:"#0a0a0c",fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"inherit",transition:"background .3s,box-shadow .3s",letterSpacing:.5,marginTop:8,boxShadow:logged?`0 0 24px ${C.grn}55`:`0 0 20px ${C.acc}33`}}>
+        {I.log} {logged?"Session Logged ✓":"Log Session"}
+      </button>
+    </div>
+  );
+};
+
+// ─── Stats Tab ────────────────────────────────────────────────────────────────
+const getWeekStart = () => {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun..6=Sat
+  const diff = (day===0?-6:1-day); // shift to Monday
+  const mon = new Date(now);
+  mon.setHours(0,0,0,0);
+  mon.setDate(now.getDate()+diff);
+  return mon.getTime();
+};
+
+const StatsTab = ({workouts,prs,weeklyGoal,onSetGoal}) => {
+  const [prQ,setPrQ]=useState("");
+  const [editGoal,setEditGoal]=useState(false);
+  const [goalDraft,setGoalDraft]=useState(weeklyGoal);
+  const [showAllPRs,setShowAllPRs]=useState(false);
+
+  const weekStart=getWeekStart();
+  const allSess=workouts.flatMap(w=>w.sessions.map(s=>({...s,wt:w.title})));
+  const weekSess=allSess.filter(s=>s.ts>=weekStart);
+  const totSess=allSess.length;
+  const totEx=workouts.flatMap(w=>Object.values(w.sections).flat()).length;
+  const totSets=workouts.flatMap(w=>Object.values(w.sections).flat()).reduce((a,e)=>a+e.sets.length,0);
+  const totVol=workouts.flatMap(w=>Object.values(w.sections).flat()).flatMap(e=>e.sets).reduce((a,s)=>a+(parseFloat(s.reps)||0)*(parseFloat(s.load)||0),0);
+  const recent=[...allSess].sort((a,b)=>b.ts-a.ts).slice(0,6);
+  const prList=Object.entries(prs||{}).filter(([n])=>n.toLowerCase().includes(prQ.toLowerCase())).sort((a,b)=>b[1].date-a[1].date);
+  const totPRs=Object.keys(prs||{}).length;
+
+  const wCount=weekSess.length;
+  const reached=wCount>=weeklyGoal;
+
+  const saveGoal=()=>{
+    const v=Math.max(1,Math.min(14,parseInt(goalDraft)||4));
+    onSetGoal(v);
+    setGoalDraft(v);
+    setEditGoal(false);
+  };
+
+  // day labels for this week
+  const dayLabels=["M","T","W","T","F","S","S"];
+  const dayDots=dayLabels.map((_,i)=>{
+    const d=new Date(weekStart+i*86400000);
+    d.setHours(0,0,0,0);
+    const next=new Date(d); next.setDate(d.getDate()+1);
+    const hit=weekSess.some(s=>s.ts>=d.getTime()&&s.ts<next.getTime());
+    return {label:dayLabels[i],hit};
+  });
+
+  return (
+    <div>
+      <div style={{marginBottom:22}}>
+        <h2 style={{margin:"0 0 3px",fontSize:20,fontWeight:800,color:C.txt}}>Overview</h2>
+        <p style={{margin:0,color:C.mut,fontSize:12}}>Your training at a glance</p>
+      </div>
+
+      {/* Weekly goal ring */}
+      <div style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:12,padding:"18px 20px",marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:20,marginBottom:14}}>
+          <Ring pct={Math.min(wCount/weeklyGoal,1)} color={reached?C.grn:C.acc}>
+            <span style={{fontSize:15,fontWeight:800,color:C.txt}}>{wCount}</span>
+          </Ring>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,marginBottom:3}}>This Week</div>
+            <div style={{fontSize:22,fontWeight:800,color:C.txt}}>
+              {wCount}
+              {editGoal
+                ? <span style={{fontSize:14,fontWeight:500,color:C.mut}}>
+                    /
+                    <input value={goalDraft} onChange={e=>setGoalDraft(e.target.value)} onBlur={saveGoal} onKeyDown={e=>e.key==="Enter"&&saveGoal()}
+                      type="number" min="1" max="14"
+                      style={{background:"transparent",border:"none",borderBottom:`1px solid ${C.acc}`,color:C.acc,fontSize:18,fontWeight:800,width:36,outline:"none",fontFamily:"inherit",textAlign:"center",marginLeft:2}}
+                      autoFocus/>
+                    <span style={{fontSize:12}}> sessions</span>
+                  </span>
+                : <span style={{color:C.mut,fontSize:14,fontWeight:500}}>/{weeklyGoal} goal</span>
+              }
+            </div>
+            <div style={{fontSize:11,color:reached?C.grn:C.accD,marginTop:3}}>
+              {reached?"🎯 Weekly goal reached!":wCount===0?"Log a session to get started":`${weeklyGoal-wCount} more to hit your goal`}
+            </div>
+          </div>
+          {/* edit goal button */}
+          <button onClick={()=>{setEditGoal(!editGoal);setGoalDraft(weeklyGoal);}}
+            title="Set weekly goal"
+            style={{background:"none",border:`1px solid ${editGoal?C.acc:C.bdr}`,borderRadius:7,color:editGoal?C.acc:C.mut,padding:"5px 8px",display:"flex",alignItems:"center",gap:4,fontSize:10,fontWeight:700,transition:"all .15s",flexShrink:0}}>
+            {I.edit} {editGoal?"Done":"Goal"}
+          </button>
+        </div>
+
+        {/* Day dots */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+          {dayDots.map((d,i)=>(
+            <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              <div style={{width:"100%",height:5,borderRadius:3,background:d.hit?(reached?C.grn:C.acc):C.bdr,transition:"background .3s"}}/>
+              <span style={{fontSize:9,color:d.hit?C.mut:C.dim,fontWeight:d.hit?700:400}}>{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+        {[{icon:I.trphy,l:"Workouts",v:workouts.length,c:C.acc},{icon:I.zap,l:"Volume kg",v:totVol.toFixed(0),c:"#d9b8ff"},{icon:I.tgt,l:"Exercises",v:totEx,c:C.ice},{icon:I.cal,l:"Total Sets",v:totSets,c:C.war}].map(s=>(
+          <div key={s.l} style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:10,padding:"13px 15px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}>
+              <span style={{color:s.c}}>{s.icon}</span>
+              <span style={{color:C.mut,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>{s.l}</span>
+            </div>
+            <div style={{fontSize:24,fontWeight:800,color:s.c}}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* PR banner */}
+      {totPRs>0&&(
+        <div style={{background:"rgba(255,215,0,.07)",border:"1px solid rgba(255,215,0,.25)",borderRadius:10,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontSize:22}}>🏆</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:800,color:C.gld}}>{totPRs} Personal Record{totPRs!==1?"s":""}</div>
+            <div style={{fontSize:10,color:C.mut,marginTop:2}}>Tracked across all exercises</div>
+          </div>
+        </div>
+      )}
+
+      {/* Workout list */}
+      {workouts.length>0&&(
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:10,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Workouts</div>
+          {workouts.map(w=>{
+            const sc=w.sessions.length, last=sc>0?w.sessions[w.sessions.length-1]:null;
+            return (
+              <div key={w.id} style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:10,padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:34,height:34,borderRadius:8,background:sc>0?C.grnF:C.accF,display:"flex",alignItems:"center",justifyContent:"center",color:sc>0?C.grn:C.acc,flexShrink:0}}>{I.bar}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{w.title}</div>
+                  <div style={{fontSize:10,color:C.mut,marginTop:2}}>{Object.values(w.sections).flat().length} exercises{last?` · last ${ago(last.ts)}`:""}</div>
+                </div>
+                <div style={{background:sc>0?C.grnF:C.accF,border:`1px solid ${sc>0?C.grn+"44":C.accD+"44"}`,color:sc>0?C.grn:C.accD,fontSize:11,fontWeight:800,borderRadius:20,padding:"3px 10px",flexShrink:0}}>
+                  {sc>0?`×${sc}`:"NEW"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Recent activity */}
+      {recent.length>0&&(
+        <div style={{marginBottom:24}}>
+          <div style={{fontSize:10,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Recent Activity</div>
+          {recent.map((s,i)=>(
+            <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,marginBottom:5}}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:i===0?C.grn:C.dim,flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,color:C.txt,fontWeight:600}}>{s.wt}</div>
+                <div style={{fontSize:10,color:C.mut,marginTop:1}}>{fmtDate(s.ts)}</div>
+              </div>
+              <span style={{color:C.mut,fontSize:10,flexShrink:0}}>{ago(s.ts)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {workouts.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 20px",color:C.mut}}>
+          <div style={{fontSize:32,marginBottom:12}}>💪</div>
+          <div style={{fontWeight:700,marginBottom:6,color:C.txt}}>No workouts yet</div>
+          <div style={{fontSize:12}}>Tap + to create your first workout</div>
+        </div>
+      )}
+
+      {/* PR History */}
+      {prList.length>0&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <span style={{fontSize:14}}>🏆</span>
+            <span style={{fontSize:10,color:C.gld,fontWeight:800,textTransform:"uppercase",letterSpacing:1.5}}>PR History</span>
+            <div style={{flex:1,height:1,background:"rgba(255,215,0,.15)"}}/>
+            <span style={{fontSize:10,color:C.mut,fontWeight:700}}>{totPRs} total</span>
+          </div>
+          {/* Search — only shown when expanded */}
+          {prQ||prList.length>3?(
+            <div style={{position:"relative",marginBottom:12}}>
+              <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:C.mut,pointerEvents:"none"}}>{I.srch}</span>
+              <input value={prQ} onChange={e=>setPrQ(e.target.value)} placeholder="Search PRs…"
+                style={{width:"100%",background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"7px 10px 7px 28px",fontSize:12,outline:"none",fontFamily:"inherit"}}
+                onFocus={e=>e.target.style.borderColor=C.gld} onBlur={e=>e.target.style.borderColor=C.bdr}/>
+            </div>
+          ):null}
+          {(prQ?prList:prList.slice(0,showAllPRs?undefined:3)).map(([name,pr])=>(
+            <div key={name} style={{background:C.sur,border:"1px solid rgba(255,215,0,.18)",borderRadius:10,padding:"12px 14px",marginBottom:6}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontWeight:700,fontSize:13,color:C.txt}}>{name}</span>
+                <span style={{fontSize:10,color:C.mut}}>{pr.date?ago(pr.date):""}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                {[{l:"Best Load",v:`${pr.bestLoad}kg`,c:C.gld},{l:"Best Reps",v:pr.bestReps,c:C.acc},{l:"Best Vol",v:`${pr.bestVol.toFixed(0)}kg`,c:"#d9b8ff"}].map(s=>(
+                  <div key={s.l} style={{background:C.bg,borderRadius:7,padding:"7px 10px"}}>
+                    <div style={{fontSize:9,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:3}}>{s.l}</div>
+                    <div style={{fontSize:15,fontWeight:800,color:s.c}}>{s.v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {/* Show all / show less toggle */}
+          {!prQ&&prList.length>3&&(
+            <button onClick={()=>setShowAllPRs(!showAllPRs)}
+              style={{width:"100%",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:8,color:C.mut,fontSize:11,fontWeight:700,padding:"9px",fontFamily:"inherit",transition:"all .15s",marginTop:2}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.gld;e.currentTarget.style.color=C.gld}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}>
+              {showAllPRs?`Show less ▴`:`Show all ${prList.length} PRs ▾`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Backup helpers ───────────────────────────────────────────────────────────
+const BACKUP_KEY = "fitpr_backup_meta";
+const loadBackupMeta = () => { try { const r=localStorage.getItem(BACKUP_KEY); return r?JSON.parse(r):{lastBackup:null,frequency:3}; } catch(e){ return {lastBackup:null,frequency:3}; } };
+const saveBackupMeta = m => { try { localStorage.setItem(BACKUP_KEY,JSON.stringify(m)); } catch(e){} };
+
+const backupStatus = lastBackup => {
+  if(!lastBackup) return {color:"#ff4d4d",label:"⚠️ No backup yet",level:"red"};
+  const days = (Date.now()-lastBackup)/(1000*60*60*24);
+  if(days<=3)  return {color:"#2ecc71",label:"✅ Protected",level:"green"};
+  if(days<=7)  return {color:"#ff9f43",label:"⚠️ Backup recommended",level:"yellow"};
+  return {color:"#ff4d4d",label:"🔴 Backup overdue",level:"red"};
+};
+
+const fmtBackupDate = ts => {
+  if(!ts) return "Never";
+  const d=new Date(ts), now=new Date();
+  const isToday=d.toDateString()===now.toDateString();
+  const isYesterday=d.toDateString()===new Date(now-86400000).toDateString();
+  const time=d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  if(isToday) return `Today, ${time}`;
+  if(isYesterday) return `Yesterday, ${time}`;
+  return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"})+`, ${time}`;
+};
+
+const triggerDownload = (data) => {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json],{type:"application/json"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href=url; a.download=`fitpr-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+
+// ─── Backup Settings Modal ────────────────────────────────────────────────────
+const BackupSettings = ({meta,onSave,onClose}) => {
+  const [freq,setFreq]=useState(meta.frequency||3);
+  const opts=[{v:1,l:"Daily"},{v:3,l:"Every 3 days"},{v:7,l:"Weekly"},{v:14,l:"Every 2 weeks"},{v:0,l:"Manual only"}];
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:18}}>💾</span>
+            <span style={{fontSize:14,fontWeight:800,color:C.txt}}>Backup Settings</span>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:C.mut,padding:4,display:"flex"}}>{I.x}</button>
+        </div>
+        <div style={{fontSize:10,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Reminder Frequency</div>
+        {opts.map(o=>(
+          <button key={o.v} onClick={()=>setFreq(o.v)}
+            style={{width:"100%",background:freq===o.v?C.accF:"transparent",border:`1px solid ${freq===o.v?C.acc:C.bdr}`,borderRadius:8,color:freq===o.v?C.acc:C.mut,fontSize:12,fontWeight:freq===o.v?800:500,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all .15s",textAlign:"left"}}>
+            <span>{o.l}</span>
+            {freq===o.v&&<span style={{fontSize:14}}>✓</span>}
+          </button>
+        ))}
+        <div style={{fontSize:11,color:C.dim,marginTop:4,marginBottom:20,lineHeight:1.5}}>
+          FitPR will show a reminder banner when a backup is due. Tap the banner to download your data as a JSON file.
+        </div>
+        <button onClick={()=>{onSave(freq);onClose();}}
+          style={{width:"100%",background:C.acc,border:"none",borderRadius:8,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"11px",fontFamily:"inherit"}}>
+          Save
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Backup Widget ────────────────────────────────────────────────────────────
+const BackupWidget = ({meta,onBackupNow,onOpenSettings}) => {
+  const st=backupStatus(meta.lastBackup);
+  const borderColor = st.level==="green"?`${C.grn}44`:st.level==="yellow"?`${C.war}44`:`${C.red}44`;
+  const bgColor     = st.level==="green"?"rgba(46,204,113,.06)":st.level==="yellow"?"rgba(255,159,67,.06)":"rgba(255,77,77,.06)";
+  const days = meta.lastBackup ? Math.floor((Date.now()-meta.lastBackup)/(1000*60*60*24)) : null;
+  return (
+    <div style={{background:bgColor,border:`1px solid ${borderColor}`,borderRadius:12,padding:"14px 16px",marginBottom:20}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:7}}>
+          <span style={{fontSize:16}}>💾</span>
+          <span style={{fontSize:11,fontWeight:800,color:C.txt,textTransform:"uppercase",letterSpacing:1}}>Backup Status</span>
+        </div>
+        <button onClick={onOpenSettings}
+          style={{background:"none",border:`1px solid ${C.bdr}`,borderRadius:6,color:C.mut,fontSize:10,fontWeight:700,padding:"3px 9px",display:"flex",alignItems:"center",gap:4,transition:"all .15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=C.acc;e.currentTarget.style.color=C.acc}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}>
+          {I.edit} Settings
+        </button>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:11,color:C.mut}}>Last backup</span>
+          <span style={{fontSize:11,fontWeight:700,color:C.txt}}>{fmtBackupDate(meta.lastBackup)}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:11,color:C.mut}}>Frequency</span>
+          <span style={{fontSize:11,fontWeight:700,color:C.txt}}>
+            {meta.frequency===0?"Manual only":meta.frequency===1?"Daily":`Every ${meta.frequency} days`}
+          </span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:11,color:C.mut}}>Format</span>
+          <span style={{fontSize:11,fontWeight:700,color:C.txt}}>JSON · Local device</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:11,color:C.mut}}>Status</span>
+          <span style={{fontSize:11,fontWeight:800,color:st.color}}>{st.label}</span>
+        </div>
+      </div>
+
+      <button onClick={onBackupNow}
+        style={{width:"100%",background:C.acc,border:"none",borderRadius:8,color:"#0a0a0c",fontSize:12,fontWeight:800,padding:"10px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"inherit",transition:"opacity .15s"}}
+        onMouseEnter={e=>e.currentTarget.style.opacity=".85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        {meta.lastBackup?"Backup Now":"Create First Backup"}
+      </button>
+
+      {days!==null&&days>0&&(
+        <div style={{fontSize:10,color:C.mut,textAlign:"center",marginTop:8}}>
+          {days===1?"1 day since last backup":`${days} days since last backup`}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Backup Panel (full slide-up drawer) ─────────────────────────────────────
+const BackupPanel = ({meta,onBackupNow,onSaveFreq,onClose}) => {
+  const [freq,setFreq]=useState(meta.frequency||3);
+  const st=backupStatus(meta.lastBackup);
+  const opts=[{v:1,l:"Daily"},{v:3,l:"Every 3 days"},{v:7,l:"Weekly"},{v:14,l:"Every 2 weeks"},{v:0,l:"Manual only"}];
+  const days=meta.lastBackup?Math.floor((Date.now()-meta.lastBackup)/(1000*60*60*24)):null;
+  return (
+    <div className="backdrop" onClick={onClose} style={{alignItems:"flex-end",padding:0}}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{background:C.sur,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:480,padding:"0 0 40px",animation:"slide-up .28s cubic-bezier(.25,.46,.45,.94) both",maxHeight:"90vh",overflowY:"auto"}}>
+
+        {/* Drag handle */}
+        <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:C.bdr}}/>
+        </div>
+
+        <div style={{padding:"12px 20px 0"}}>
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:9,background:`${st.color}18`,border:`1px solid ${st.color}44`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={st.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{fontSize:14,fontWeight:800,color:C.txt}}>Backup</div>
+                <div style={{fontSize:10,color:st.color,fontWeight:700,marginTop:1}}>{st.label}</div>
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:"none",border:"none",color:C.mut,padding:6,display:"flex"}}>{I.x}</button>
+          </div>
+
+          {/* Status rows */}
+          <div style={{background:C.bg,borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+            {[
+              {l:"Last backup",  v:fmtBackupDate(meta.lastBackup)},
+              {l:"Format",       v:"JSON · Local device"},
+              {l:"Frequency",    v:freq===0?"Manual only":freq===1?"Daily":`Every ${freq} days`},
+              {l:"Age",          v:days===null?"Never backed up":days===0?"Today":days===1?"1 day ago":`${days} days ago`},
+            ].map((r,i,arr)=>(
+              <div key={r.l} style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingBottom:i<arr.length-1?10:0,marginBottom:i<arr.length-1?10:0,borderBottom:i<arr.length-1?`1px solid ${C.bdr}`:"none"}}>
+                <span style={{fontSize:11,color:C.mut}}>{r.l}</span>
+                <span style={{fontSize:11,fontWeight:700,color:C.txt}}>{r.v}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Backup now button */}
+          <button onClick={onBackupNow}
+            style={{width:"100%",background:C.acc,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"inherit",marginBottom:24,transition:"opacity .15s"}}
+            onMouseEnter={e=>e.currentTarget.style.opacity=".85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            {meta.lastBackup?"Backup Now":"Create First Backup"}
+          </button>
+
+          {/* Frequency settings */}
+          <div style={{fontSize:10,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Reminder Frequency</div>
+          {opts.map(o=>(
+            <button key={o.v} onClick={()=>{setFreq(o.v);onSaveFreq(o.v);}}
+              style={{width:"100%",background:freq===o.v?C.accF:"transparent",border:`1px solid ${freq===o.v?C.acc:C.bdr}`,borderRadius:8,color:freq===o.v?C.acc:C.mut,fontSize:12,fontWeight:freq===o.v?800:500,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all .15s",textAlign:"left",fontFamily:"inherit"}}>
+              <span>{o.l}</span>
+              {freq===o.v&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+            </button>
+          ))}
+          <div style={{fontSize:11,color:C.dim,marginTop:10,lineHeight:1.6}}>
+            A reminder banner appears when a backup is due. Tap it or use the button above to download your data as a .json file.
+          </div>
+
+          {/* Save location note */}
+          <div style={{background:C.bg,border:`1px solid ${C.bdr}`,borderRadius:10,padding:"12px 14px",marginTop:16}}>
+            <div style={{fontSize:10,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Where is my file saved?</div>
+            {[
+              {icon:"📱",label:"iOS (Safari)",   val:"Files app → Downloads (or iCloud Drive)"},
+              {icon:"🤖",label:"Android (Chrome)",val:"Internal storage → Downloads folder"},
+              {icon:"💻",label:"Desktop",         val:"Your system Downloads folder"},
+            ].map(r=>(
+              <div key={r.label} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
+                <span style={{fontSize:14,flexShrink:0,marginTop:1}}>{r.icon}</span>
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.txt}}>{r.label}</div>
+                  <div style={{fontSize:10,color:C.mut,marginTop:1}}>{r.val}</div>
+                </div>
+              </div>
+            ))}
+            <div style={{borderTop:`1px solid ${C.bdr}`,marginTop:8,paddingTop:10,fontSize:10,color:C.dim,lineHeight:1.6}}>
+              Tip: on iOS, tap <span style={{color:C.mut,fontWeight:700}}>"Save to Files"</span> after downloading and choose a folder like <span style={{color:C.mut,fontWeight:700}}>FitPR/Backups</span> to keep things organised. The filename includes today's date, e.g. <span style={{color:C.acc}}>fitpr-backup-{new Date().toISOString().slice(0,10)}.json</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Swipe hook ───────────────────────────────────────────────────────────────
+const useSwipe = (onLeft, onRight, threshold=50) => {
+  const x0 = useRef(null);
+  const y0 = useRef(null);
+  const locked = useRef(null); // "h" | "v" | null
+  return {
+    onTouchStart: e => {
+      x0.current = e.touches[0].clientX;
+      y0.current = e.touches[0].clientY;
+      locked.current = null;
+    },
+    onTouchMove: e => {
+      if(!x0.current) return;
+      const dx = e.touches[0].clientX - x0.current;
+      const dy = e.touches[0].clientY - y0.current;
+      if(!locked.current) locked.current = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      if(locked.current === "h") e.preventDefault(); // prevent scroll only on horizontal
+    },
+    onTouchEnd: e => {
+      if(!x0.current || locked.current !== "h") return;
+      const dx = e.changedTouches[0].clientX - x0.current;
+      if(dx < -threshold) onLeft();
+      else if(dx > threshold) onRight();
+      x0.current = null;
+    },
+  };
+};
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+function App(){
+  const init=initState();
+  const [workouts,setWorkouts]=useState(init.workouts);
+  const [tab,setTab]=useState(init.tab||"stats");
+  const [prs,setPrs]=useState(init.prs||{});
+  const [weeklyGoal,setWeeklyGoal]=useState(init.weeklyGoal||4);
+  const [slideDir,setSlideDir]=useState(0);
+  const [backupMeta,setBackupMeta]=useState(loadBackupMeta);
+  const [backupReminder,setBackupReminder]=useState(false);
+  const [backupPanel,setBackupPanel]=useState(false);
+  const contentRef=useRef();
+
+  useEffect(()=>{ save({workouts,tab,prs,weeklyGoal}); },[workouts,tab,prs,weeklyGoal]);
+
+  // Check if backup reminder should show
+  useEffect(()=>{
+    const check=()=>{
+      const {lastBackup,frequency}=backupMeta;
+      if(frequency===0) return; // manual only
+      if(!lastBackup){ setBackupReminder(true); return; }
+      const days=(Date.now()-lastBackup)/(1000*60*60*24);
+      setBackupReminder(days>=frequency);
+    };
+    check();
+    const timer=setInterval(check, 60*60*1000); // re-check every hour
+    return ()=>clearInterval(timer);
+  },[backupMeta]);
+
+  const doBackup=()=>{
+    triggerDownload({workouts,prs,exportedAt:new Date().toISOString()});
+    const updated={...backupMeta,lastBackup:Date.now()};
+    setBackupMeta(updated);
+    saveBackupMeta(updated);
+    setBackupReminder(false);
+    toast("💾 Backup saved to your device");
+  };
+
+  const saveBackupFreq=freq=>{
+    const updated={...backupMeta,frequency:freq};
+    setBackupMeta(updated);
+    saveBackupMeta(updated);
+  };
+
+  const tabIds = ["stats", ...workouts.map(w=>w.id)];
+  const goToTab=(newTab,dir)=>{ setSlideDir(dir); setTab(newTab); setTimeout(()=>setSlideDir(0),320); };
+  const swipeLeft=()=>{ const i=tabIds.indexOf(tab); if(i<tabIds.length-1) goToTab(tabIds[i+1],-1); };
+  const swipeRight=()=>{ const i=tabIds.indexOf(tab); if(i>0) goToTab(tabIds[i-1],1); };
+  const swipe=useSwipe(swipeLeft,swipeRight);
+
+  const addW=()=>{ const w=mkWork(workouts.length+1); setWorkouts(p=>[...p,w]); goToTab(w.id,-1); };
+  const updW=(id,u)=>setWorkouts(p=>p.map(w=>w.id===id?u:w));
+  const delW=id=>{ setWorkouts(p=>p.filter(w=>w.id!==id)); goToTab("stats",1); };
+
+  const active=workouts.find(w=>w.id===tab);
+  const totSess=workouts.reduce((a,w)=>a+w.sessions.length,0);
+  const slideStyle={animation:slideDir!==0?`slide-in-${slideDir<0?"left":"right"} 0.28s cubic-bezier(.25,.46,.45,.94) both`:"none"};
+
+  return (
+    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'DM Mono','Courier New',monospace",color:C.txt}}>
+      <style>{`
+        @keyframes slide-in-left  { from{opacity:.4;transform:translateX(48px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes slide-in-right { from{opacity:.4;transform:translateX(-48px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes slide-up { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+      `}</style>
+
+      {/* Backup panel */}
+      {backupPanel&&<BackupPanel meta={backupMeta} onBackupNow={()=>{doBackup();setBackupPanel(false);}} onSaveFreq={saveBackupFreq} onClose={()=>setBackupPanel(false)}/>}
+
+      {/* Backup reminder banner */}
+      {backupReminder&&(
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:1500,background:"#18181d",borderTop:`1px solid ${C.war}55`,padding:"12px 18px 28px",display:"flex",alignItems:"center",gap:12,animation:"slide-up .3s ease both"}}>
+          <span style={{fontSize:20,flexShrink:0}}>💾</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.txt}}>Backup reminder</div>
+            <div style={{fontSize:10,color:C.mut,marginTop:2}}>
+              {backupMeta.lastBackup
+                ? `Last backup was ${Math.floor((Date.now()-backupMeta.lastBackup)/(1000*60*60*24))} days ago`
+                : "You haven't backed up yet"}
+            </div>
+          </div>
+          <button onClick={()=>setBackupReminder(false)}
+            style={{background:"none",border:"none",color:C.mut,padding:6,display:"flex",flexShrink:0}}>{I.x}</button>
+          <button onClick={doBackup}
+            style={{background:C.acc,border:"none",borderRadius:8,color:"#0a0a0c",fontSize:12,fontWeight:800,padding:"8px 14px",flexShrink:0,fontFamily:"inherit"}}>
+            Backup Now
+          </button>
+        </div>
+      )}
+
+      <div style={{padding:"18px 18px 0",maxWidth:480,margin:"0 auto"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+          <div style={{width:30,height:30,background:C.acc,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <path d="M6 5v14M18 5v14M2 8h4M18 8h4M2 16h4M18 16h4M6 12h12" stroke="#0a0a0c" strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style={{fontSize:13,fontWeight:800,letterSpacing:1.5,color:C.txt}}>FitPR</div>
+            <div style={{fontSize:8,color:C.mut,letterSpacing:2,textTransform:"uppercase"}}>Fitness Tracker</div>
+          </div>
+          <div style={{flex:1}}/>
+          {/* Backup icon button */}
+          {(()=>{const st=backupStatus(backupMeta.lastBackup); return(
+            <button onClick={()=>setBackupPanel(true)} title="Backup"
+              style={{position:"relative",background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.mut,transition:"all .15s",flexShrink:0}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=st.color;e.currentTarget.style.color=st.color}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              {/* status dot */}
+              <div style={{position:"absolute",top:5,right:5,width:6,height:6,borderRadius:"50%",background:st.color,boxShadow:`0 0 5px ${st.color}99`}}/>
+            </button>
+          );})()}
+          {totSess>0&&(
+            <div style={{background:C.grnF,border:`1px solid ${C.grn}44`,color:C.grn,fontSize:10,fontWeight:800,borderRadius:20,padding:"3px 10px"}}>
+              {totSess} sessions
+            </div>
+          )}
+        </div>
+        {/* Tabs */}
+        <div className="tabs">
+          <button onClick={()=>goToTab("stats",tabIds.indexOf("stats")<tabIds.indexOf(tab)?1:-1)}
+            style={{background:tab==="stats"?C.acc:C.sur,color:tab==="stats"?"#0a0a0c":C.mut,border:`1px solid ${tab==="stats"?C.acc:C.bdr}`,borderBottom:"none",borderRadius:"8px 8px 0 0",padding:"7px 13px",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",letterSpacing:.5}}>
+            {I.stats} STATS
+          </button>
+          {workouts.map(w=>{
+            const on=tab===w.id,sc=w.sessions.length,wIdx=tabIds.indexOf(w.id),curIdx=tabIds.indexOf(tab);
+            return (
+              <button key={w.id} onClick={()=>goToTab(w.id,wIdx<curIdx?1:-1)}
+                style={{background:on?C.sur:"transparent",color:on?C.txt:C.mut,border:`1px solid ${on?C.bdr:"transparent"}`,borderBottom:on?`1px solid ${C.sur}`:"none",borderRadius:"8px 8px 0 0",padding:"7px 11px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",display:"flex",alignItems:"center",gap:6,maxWidth:130,overflow:"hidden"}}>
+                <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{w.title}</span>
+                {sc>0&&<span style={{background:C.grn,color:"#0a0a0c",fontSize:9,fontWeight:800,borderRadius:20,padding:"1px 6px",flexShrink:0}}>×{sc}</span>}
+              </button>
+            );
+          })}
+          <button onClick={addW}
+            style={{background:"transparent",color:C.mut,border:`1px dashed ${C.bdr}`,borderBottom:"none",borderRadius:"8px 8px 0 0",padding:"7px 11px",display:"flex",alignItems:"center",flexShrink:0,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.color=C.acc;e.currentTarget.style.borderColor=C.accD}}
+            onMouseLeave={e=>{e.currentTarget.style.color=C.mut;e.currentTarget.style.borderColor=C.bdr}}>
+            {I.plus}
+          </button>
+        </div>
+      </div>
+
+      {/* Swipeable content */}
+      <div style={{borderTop:`1px solid ${C.bdr}`}} {...swipe} ref={contentRef}>
+        <div key={tab} style={{maxWidth:480,margin:"0 auto",padding:"22px 18px 100px",...slideStyle}}>
+          {tab==="stats"&&<StatsTab workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} onSetGoal={setWeeklyGoal}/>}
+          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} prs={prs} onPRUpdate={setPrs}/>}
+        </div>
+      </div>
+
+      {/* Dot indicator */}
+      {tabIds.length>1&&(
+        <div style={{position:"fixed",bottom:backupReminder?80:16,left:"50%",transform:"translateX(-50%)",display:"flex",gap:5,zIndex:100,pointerEvents:"none",transition:"bottom .3s"}}>
+          {tabIds.map(id=>(
+            <div key={id} style={{width:id===tab?16:5,height:5,borderRadius:3,background:id===tab?C.acc:C.bdr,transition:"all .3s",opacity:.8}}/>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+<script>
+// Service Worker
+if("serviceWorker" in navigator){
+  const sw=`const C="fitpr-v2";self.addEventListener("install",e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(["/"])).then(()=>self.skipWaiting()))});self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});self.addEventListener("fetch",e=>{if(e.request.method!=="GET")return;e.respondWith(caches.match(e.request).then(ca=>{const net=fetch(e.request).then(r=>{if(r.ok){const cl=r.clone();caches.open(C).then(c=>c.put(e.request,cl))}return r}).catch(()=>ca);return ca||net}))});`;
+  const blob=new Blob([sw],{type:"application/javascript"});
+  navigator.serviceWorker.register(URL.createObjectURL(blob),{scope:"/"}).catch(()=>{});
+}
+// Install prompt
+let dp=null;
+const banner=document.getElementById("install-banner");
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();dp=e;banner.classList.add("show")});
+document.getElementById("btn-install").addEventListener("click",async()=>{if(!dp)return;dp.prompt();const{outcome}=await dp.userChoice;if(outcome==="accepted")banner.classList.remove("show");dp=null});
+document.getElementById("btn-dismiss").addEventListener("click",()=>banner.classList.remove("show"));
+window.addEventListener("appinstalled",()=>{banner.classList.remove("show");dp=null});
+</script>
+</body>
+</html>
