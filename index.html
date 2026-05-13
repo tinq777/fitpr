@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
   <meta name="theme-color" content="#0a0a0c"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -22,21 +22,28 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html{font-size:14px}
+    html{font-size:14px;-webkit-text-size-adjust:100%}
     body{font-family:'DM Mono','Courier New',monospace;background:#0a0a0c;color:#f0f0f5;min-height:100dvh;overscroll-behavior:none}
+    /* Prevent iOS auto-zoom on input focus — must be font-size >= 16px */
+    input,select,textarea{font-size:16px!important;font-family:inherit}
     input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
     input[type=number]{-moz-appearance:textfield}
     ::-webkit-scrollbar{display:none}
-    button{font-family:inherit;cursor:pointer}
-    input{font-family:inherit}
+    button{font-family:inherit;cursor:pointer;touch-action:manipulation}
     #install-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:2000;background:#111114;border-top:1px solid #1e1e26;padding:14px 18px 28px;align-items:center;gap:12px}
     #install-banner.show{display:flex}
-    .backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
+    .backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
     .modal{background:#111114;border:1px solid #1e1e26;border-radius:14px;padding:24px 22px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.6)}
-    #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(16px);background:#2ecc71;color:#0a0a0c;font-weight:800;font-size:12px;font-family:'DM Mono',monospace;padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:3000}
+    /* Picker full-screen on mobile */
+    .picker-sheet{background:#111114;border-radius:16px 16px 0 0;width:100%;max-width:480px;display:flex;flex-direction:column;animation:slide-up .25s cubic-bezier(.25,.46,.45,.94) both;max-height:92dvh}
+    #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(16px);background:#2ecc71;color:#0a0a0c;font-weight:800;font-size:14px;font-family:'DM Mono',monospace;padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:3000}
     #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
     .tabs{display:flex;gap:3px;overflow-x:auto;scrollbar-width:none}
     .tabs::-webkit-scrollbar{display:none}
+    @media(max-width:480px){
+      .modal{border-radius:16px 16px 0 0;max-width:100%;margin:0;position:fixed;bottom:0;left:0;right:0;max-height:92dvh;overflow-y:auto}
+      .backdrop{align-items:flex-end;padding:0}
+    }
   </style>
 </head>
 <body>
@@ -311,7 +318,7 @@ const ytURL = name => `https://www.youtube.com/results?search_query=${encodeURIC
 
 const Inp = ({value,onChange,style={},...p}) => (
   <input value={value} onChange={e=>onChange(e.target.value)}
-    style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:6,color:C.txt,padding:"5px 9px",fontSize:13,outline:"none",width:"100%",fontFamily:"inherit",transition:"border-color .15s",...style}}
+    style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:6,color:C.txt,padding:"6px 10px",fontSize:16,outline:"none",width:"100%",fontFamily:"inherit",transition:"border-color .15s",...style}}
     onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr} {...p}/>
 );
 
@@ -490,47 +497,51 @@ const Picker = ({onSelect,onClose}) => {
   const [q,setQ]=useState("");
   const [grp,setGrp]=useState("Chest");
   const ref=useRef();
-  useEffect(()=>{ref.current?.focus()},[]);
+  useEffect(()=>{ setTimeout(()=>ref.current?.focus(),100); },[]);
   const groups=Object.keys(LIB);
   const items=q.trim()
     ? Object.entries(LIB).flatMap(([g,exs])=>exs.filter(e=>e.name.toLowerCase().includes(q.toLowerCase())).map(e=>({e,g})))
     : LIB[grp].map(e=>({e,g:grp}));
   return (
-    <div className="backdrop" onClick={onClose}>
-      <div className="modal" onClick={ev=>ev.stopPropagation()} style={{maxWidth:380,maxHeight:"82vh",display:"flex",flexDirection:"column",padding:0,overflow:"hidden"}}>
-        <div style={{padding:"16px 16px 0",borderBottom:`1px solid ${C.bdr}`}}>
+    <div className="backdrop" onClick={onClose} style={{padding:0}}>
+      <div className="picker-sheet" onClick={ev=>ev.stopPropagation()}>
+        {/* Drag handle */}
+        <div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px",flexShrink:0}}>
+          <div style={{width:36,height:4,borderRadius:2,background:"#2a2a36"}}/>
+        </div>
+        <div style={{padding:"8px 16px 0",flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <span style={{fontSize:14,fontWeight:800,color:C.txt}}>Exercise Library</span>
-            <button onClick={onClose} style={{background:"none",border:"none",color:C.mut,padding:4,display:"flex"}}>{I.x}</button>
+            <span style={{fontSize:15,fontWeight:800,color:C.txt}}>Exercise Library</span>
+            <button onClick={onClose} style={{background:"none",border:"none",color:C.mut,padding:6,display:"flex",minWidth:44,minHeight:44,alignItems:"center",justifyContent:"center"}}>{I.x}</button>
           </div>
           <div style={{position:"relative",marginBottom:12}}>
-            <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:C.mut,pointerEvents:"none"}}>{I.srch}</span>
+            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:C.mut,pointerEvents:"none"}}>{I.srch}</span>
             <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search exercises…"
-              style={{width:"100%",background:C.surH,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"7px 10px 7px 30px",fontSize:12,outline:"none",fontFamily:"inherit"}}
+              style={{width:"100%",background:C.surH,border:`1px solid ${C.bdr}`,borderRadius:10,color:C.txt,padding:"10px 12px 10px 32px",outline:"none",fontFamily:"inherit"}}
               onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr}/>
           </div>
           {!q.trim()&&(
-            <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:12,scrollbarWidth:"none"}}>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:12,scrollbarWidth:"none"}}>
               {groups.map(g=>(
                 <button key={g} onClick={()=>setGrp(g)}
-                  style={{background:grp===g?C.acc:"transparent",color:grp===g?"#0a0a0c":C.mut,border:`1px solid ${grp===g?C.acc:C.bdr}`,borderRadius:20,padding:"4px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s"}}>
+                  style={{background:grp===g?C.acc:"transparent",color:grp===g?"#0a0a0c":C.mut,border:`1px solid ${grp===g?C.acc:C.bdr}`,borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",minHeight:36}}>
                   {g}
                 </button>
               ))}
             </div>
           )}
         </div>
-        <div style={{overflowY:"auto",flex:1,padding:"8px 12px 16px"}}>
-          {items.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:C.mut,fontSize:12}}>No exercises found</div>}
+        <div style={{overflowY:"auto",flex:1,padding:"4px 16px 32px"}}>
+          {items.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:C.mut,fontSize:13}}>No exercises found</div>}
           {items.map(({e,g})=>(
             <button key={e.name} onClick={()=>{onSelect(e.name);onClose()}}
-              style={{width:"100%",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"10px 12px",marginBottom:5,display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,fontWeight:600,transition:"all .15s",textAlign:"left"}}
+              style={{width:"100%",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:10,color:C.txt,padding:"13px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13,fontWeight:600,transition:"all .15s",textAlign:"left",minHeight:48}}
               onMouseEnter={ev=>{ev.currentTarget.style.borderColor=C.acc;ev.currentTarget.style.background=C.accF}}
               onMouseLeave={ev=>{ev.currentTarget.style.borderColor=C.bdr;ev.currentTarget.style.background="transparent"}}>
               <span>{e.name}</span>
               <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0}}>
-                {e.cues&&<span style={{fontSize:9,color:C.ice,background:`${C.ice}15`,borderRadius:20,padding:"2px 7px"}}>cues</span>}
-                {q.trim()&&<span style={{fontSize:9,color:C.mut,background:C.surH,borderRadius:20,padding:"2px 8px"}}>{g}</span>}
+                {e.cues&&<span style={{fontSize:10,color:C.ice,background:`${C.ice}15`,borderRadius:20,padding:"3px 8px"}}>cues</span>}
+                {q.trim()&&<span style={{fontSize:10,color:C.mut,background:C.surH,borderRadius:20,padding:"3px 8px"}}>{g}</span>}
               </div>
             </button>
           ))}
