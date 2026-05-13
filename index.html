@@ -134,7 +134,7 @@ const mkWork = n => ({
 const initState = () => {
   const s = load();
   if(s && s.workouts && s.workouts.length) return s;
-  return { workouts:[mkWork(1)], tab:"stats", prs:{}, weeklyGoal:4 };
+  return { workouts:[mkWork(1)], tab:"stats", prs:{}, weeklyGoal:4, onboarded:false };
 };
 
 // ─── PR helpers ───────────────────────────────────────────────────────────────
@@ -937,6 +937,184 @@ const StatsTab = ({workouts,prs,weeklyGoal,onSetGoal}) => {
   );
 };
 
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+const SLIDES = [
+  {
+    emoji: "💪",
+    title: "Welcome to FitPR",
+    subtitle: "Your personal fitness tracker",
+    body: "Track workouts, log sessions, and watch your personal records grow — all stored privately on your device. Nothing leaves your phone.",
+    accent: C => C.acc,
+  },
+  {
+    emoji: "📋",
+    title: "Build Your Workouts",
+    subtitle: "Structured & flexible",
+    body: "Create as many workout tabs as you need. Each one has Warm-Up, Exercises, and Cool Down sections. Name them anything — Push, Pull, Day 1, Legs.",
+    accent: C => C.war,
+    features: ["130+ exercises in the library","Form cues + YouTube links","Custom exercises supported"],
+  },
+  {
+    emoji: "📊",
+    title: "Track Every Set",
+    subtitle: "Reps, load & progression",
+    body: "Use − / + steppers to log reps and kg per set. Tick off sets as you complete them. After each session, FitPR shows how you compared to last time.",
+    accent: C => C.ice,
+    features: ["Previous session comparison","Set completion checkmarks","Volume tracked automatically"],
+  },
+  {
+    emoji: "🏆",
+    title: "Personal Records",
+    subtitle: "Your bests, automatically tracked",
+    body: "Every time you log a session, FitPR checks if you beat your best load, reps, or volume for any exercise. A 🏆 badge appears on sets that match your PR.",
+    accent: C => C.gld,
+    features: ["Best load · best reps · best volume","Toast notification on new PRs","Full PR history on the dashboard"],
+  },
+  {
+    emoji: "💾",
+    title: "Backup Your Data",
+    subtitle: "Stay protected",
+    body: "All data lives on your device. Set a backup reminder and FitPR will prompt you to download a JSON file. Tap the download icon in the top-right any time.",
+    accent: C => C.grn,
+    features: ["Scheduled reminders (daily to weekly)","One-tap JSON download","Green / amber / red backup status"],
+  },
+  {
+    emoji: "📲",
+    title: "Install on Your Phone",
+    subtitle: "Add to home screen",
+    body: "FitPR works like a native app — install it to your home screen for full-screen access, offline use, and faster launch.",
+    accent: C => "#d9b8ff",
+    install: true,
+  },
+  {
+    subtitle: "Let's get training",
+    body: "Swipe left and right to move between tabs. Tap + to add a new workout. Your first workout is already waiting for you.",
+    accent: C => C.acc,
+    cta: "Start Training",
+  },
+];
+
+const Onboarding = ({onDone}) => {
+  const [idx,setIdx]=useState(0);
+  const [exiting,setExiting]=useState(false);
+  const slide=SLIDES[idx];
+  const isLast=idx===SLIDES.length-1;
+  const accentColor=slide.accent(C);
+
+  const next=()=>{
+    if(isLast){ finish(); return; }
+    setIdx(i=>i+1);
+  };
+  const finish=()=>{ setExiting(true); setTimeout(onDone,350); };
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9000,background:C.bg,display:"flex",flexDirection:"column",fontFamily:"'DM Mono','Courier New',monospace",opacity:exiting?0:1,transition:"opacity .35s"}}>
+
+      {/* Skip */}
+      {!isLast&&(
+        <button onClick={finish}
+          style={{position:"absolute",top:20,right:20,background:"none",border:"none",color:C.mut,fontSize:13,fontWeight:700,padding:"8px 12px",zIndex:1}}>
+          Skip
+        </button>
+      )}
+
+      {/* Content */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"40px 28px 8px",textAlign:"center",overflowY:"auto"}}>
+
+        {/* Emoji circle */}
+        <div style={{width:96,height:96,borderRadius:"50%",background:`${accentColor}18`,border:`2px solid ${accentColor}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,marginBottom:28,transition:"all .3s"}}>
+          {slide.emoji}
+        </div>
+
+        <div style={{fontSize:11,color:accentColor,fontWeight:800,textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>
+          {slide.subtitle}
+        </div>
+        <h1 style={{fontSize:24,fontWeight:800,color:C.txt,margin:"0 0 16px",lineHeight:1.2}}>
+          {slide.title}
+        </h1>
+        <p style={{fontSize:13,color:C.mut,lineHeight:1.7,maxWidth:320,margin:"0 0 28px"}}>
+          {slide.body}
+        </p>
+
+        {/* Feature pills */}
+        {slide.features&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%",maxWidth:320,marginBottom:8}}>
+            {slide.features.map((f,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:10,padding:"10px 14px",textAlign:"left"}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:accentColor,flexShrink:0}}/>
+                <span style={{fontSize:12,color:C.txt,fontWeight:600}}>{f}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Install instructions */}
+        {slide.install&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%",maxWidth:320}}>
+            {[
+              {
+                icon:"📱",
+                label:"iOS — Safari",
+                steps:["Open in Safari","Tap the Share button ↑","Tap \"Add to Home Screen\"","Tap Add"],
+                color:"#48dbfb",
+              },
+              {
+                icon:"🤖",
+                label:"Android — Chrome",
+                steps:["Open in Chrome","Tap the ⋮ menu","Tap \"Add to Home Screen\"","Tap Install"],
+                color:"#2ecc71",
+              },
+              {
+                icon:"💻",
+                label:"Desktop — Chrome / Edge",
+                steps:["Open in Chrome or Edge","Click the install icon in the address bar","Click Install"],
+                color:"#c8f542",
+              },
+            ].map(p=>(
+              <div key={p.label} style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:12,padding:"12px 14px",textAlign:"left"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{fontSize:16}}>{p.icon}</span>
+                  <span style={{fontSize:12,fontWeight:800,color:p.color}}>{p.label}</span>
+                </div>
+                {p.steps.map((s,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:i<p.steps.length-1?5:0}}>
+                    <span style={{fontSize:10,fontWeight:800,color:p.color,flexShrink:0,minWidth:16,marginTop:1}}>{i+1}.</span>
+                    <span style={{fontSize:11,color:C.mut,lineHeight:1.5}}>{s}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom */}
+      <div style={{padding:"0 28px 48px",display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
+        {/* Dot indicators */}
+        <div style={{display:"flex",gap:6}}>
+          {SLIDES.map((_,i)=>(
+            <button key={i} onClick={()=>setIdx(i)}
+              style={{width:i===idx?20:6,height:6,borderRadius:3,background:i===idx?accentColor:C.bdr,border:"none",padding:0,transition:"all .3s",cursor:"pointer"}}/>
+          ))}
+        </div>
+
+        {/* CTA button */}
+        <button onClick={next}
+          style={{width:"100%",maxWidth:320,background:accentColor,border:"none",borderRadius:14,color:isLast?"#0a0a0c":"#0a0a0c",fontSize:15,fontWeight:800,padding:"16px",fontFamily:"inherit",letterSpacing:.5,boxShadow:`0 0 30px ${accentColor}44`,transition:"all .3s"}}>
+          {slide.cta||(isLast?"Start Training":"Next →")}
+        </button>
+
+        {idx>0&&(
+          <button onClick={()=>setIdx(i=>i-1)}
+            style={{background:"none",border:"none",color:C.mut,fontSize:12,fontWeight:700,padding:"4px",fontFamily:"inherit"}}>
+            ← Back
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── Backup helpers ───────────────────────────────────────────────────────────
 const BACKUP_KEY = "fitpr_backup_meta";
 const loadBackupMeta = () => { try { const r=localStorage.getItem(BACKUP_KEY); return r?JSON.parse(r):{lastBackup:null,frequency:3}; } catch(e){ return {lastBackup:null,frequency:3}; } };
@@ -1199,13 +1377,14 @@ function App(){
   const [tab,setTab]=useState(init.tab||"stats");
   const [prs,setPrs]=useState(init.prs||{});
   const [weeklyGoal,setWeeklyGoal]=useState(init.weeklyGoal||4);
+  const [onboarded,setOnboarded]=useState(init.onboarded!==false);
   const [slideDir,setSlideDir]=useState(0);
   const [backupMeta,setBackupMeta]=useState(loadBackupMeta);
   const [backupReminder,setBackupReminder]=useState(false);
   const [backupPanel,setBackupPanel]=useState(false);
   const contentRef=useRef();
 
-  useEffect(()=>{ save({workouts,tab,prs,weeklyGoal}); },[workouts,tab,prs,weeklyGoal]);
+  useEffect(()=>{ save({workouts,tab,prs,weeklyGoal,onboarded}); },[workouts,tab,prs,weeklyGoal,onboarded]);
 
   // Check if backup reminder should show
   useEffect(()=>{
@@ -1252,6 +1431,7 @@ function App(){
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'DM Mono','Courier New',monospace",color:C.txt}}>
+      {!onboarded&&<Onboarding onDone={()=>setOnboarded(true)}/>}
       <style>{`
         @keyframes slide-in-left  { from{opacity:.4;transform:translateX(48px)} to{opacity:1;transform:translateX(0)} }
         @keyframes slide-in-right { from{opacity:.4;transform:translateX(-48px)} to{opacity:1;transform:translateX(0)} }
