@@ -15,8 +15,13 @@
       start_url:".", display:"standalone", background_color:"#0a0a0c", theme_color:"#0a0a0c",
       icons:[{ src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23c8f542'/%3E%3Cpath d='M160 128v256M352 128v256M80 192h80M352 192h80M80 320h80M352 320h80M160 256h192' stroke='%230a0a0c' stroke-width='56' stroke-linecap='round'/%3E%3C/svg%3E", sizes:"any", type:"image/svg+xml" }]
     };
-    const b = new Blob([JSON.stringify(manifest)],{type:"application/json"});
-    document.write('<link rel="manifest" href="'+URL.createObjectURL(b)+'">');
+    (function(){
+      const b = new Blob([JSON.stringify(manifest)], {type:"application/json"});
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = URL.createObjectURL(b);
+      document.head.appendChild(link);
+    })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap"/>
@@ -997,42 +1002,69 @@ const SLIDES = [
 const Onboarding = ({onDone}) => {
   const [idx,setIdx]=useState(0);
   const [exiting,setExiting]=useState(false);
+  const [slideDir,setSlideDir]=useState(0);
   const slide=SLIDES[idx];
   const isLast=idx===SLIDES.length-1;
   const accentColor=slide.accent(C);
 
-  const next=()=>{
-    if(isLast){ finish(); return; }
-    setIdx(i=>i+1);
+  const goTo=(newIdx,dir)=>{
+    if(newIdx<0||newIdx>=SLIDES.length) return;
+    setSlideDir(dir);
+    setIdx(newIdx);
+    setTimeout(()=>setSlideDir(0),280);
   };
+  const next=()=>{ if(isLast){ finish(); return; } goTo(idx+1,-1); };
+  const back=()=>goTo(idx-1,1);
   const finish=()=>{ setExiting(true); setTimeout(onDone,350); };
 
+  // Swipe support
+  const swipe=useSwipe(
+    ()=>{ if(!isLast) goTo(idx+1,-1); else finish(); },
+    ()=>{ if(idx>0) goTo(idx-1,1); }
+  );
+
+  const slideStyle={
+    animation: slideDir!==0
+      ? `slide-in-${slideDir<0?"left":"right"} 0.26s cubic-bezier(.25,.46,.45,.94) both`
+      : "none",
+  };
+
   return (
-    <div style={{position:"fixed",inset:0,zIndex:9000,background:C.bg,display:"flex",flexDirection:"column",fontFamily:"'DM Mono','Courier New',monospace",opacity:exiting?0:1,transition:"opacity .35s"}}>
+    <div style={{position:"fixed",inset:0,zIndex:9000,background:C.bg,display:"flex",flexDirection:"column",fontFamily:"'DM Mono','Courier New',monospace",opacity:exiting?0:1,transition:"opacity .35s"}}
+      {...swipe}>
 
-      {/* Skip */}
-      {!isLast&&(
+      {/* Header row: back + skip */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px 0",flexShrink:0}}>
+        {idx>0
+          ? <button onClick={back}
+              style={{background:"none",border:"none",color:C.mut,fontSize:13,fontWeight:700,padding:"8px 4px",display:"flex",alignItems:"center",gap:4}}>
+              ← Back
+            </button>
+          : <div style={{width:60}}/>
+        }
         <button onClick={finish}
-          style={{position:"absolute",top:20,right:20,background:"none",border:"none",color:C.mut,fontSize:13,fontWeight:700,padding:"8px 12px",zIndex:1}}>
-          Skip
+          style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:20,color:C.mut,fontSize:12,fontWeight:700,padding:"6px 14px",transition:"all .15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=C.acc;e.currentTarget.style.color=C.acc}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut}}>
+          Skip onboarding
         </button>
-      )}
+      </div>
 
-      {/* Content */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"40px 28px 8px",textAlign:"center",overflowY:"auto"}}>
+      {/* Scrollable content area — keyed to idx for slide animation */}
+      <div key={idx} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"28px 28px 8px",textAlign:"center",overflowY:"auto",...slideStyle}}>
 
         {/* Emoji circle */}
-        <div style={{width:96,height:96,borderRadius:"50%",background:`${accentColor}18`,border:`2px solid ${accentColor}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,marginBottom:28,transition:"all .3s"}}>
+        <div style={{width:96,height:96,borderRadius:"50%",background:`${accentColor}18`,border:`2px solid ${accentColor}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,marginBottom:24,flexShrink:0}}>
           {slide.emoji}
         </div>
 
         <div style={{fontSize:11,color:accentColor,fontWeight:800,textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>
           {slide.subtitle}
         </div>
-        <h1 style={{fontSize:24,fontWeight:800,color:C.txt,margin:"0 0 16px",lineHeight:1.2}}>
+        <h1 style={{fontSize:24,fontWeight:800,color:C.txt,margin:"0 0 14px",lineHeight:1.2}}>
           {slide.title}
         </h1>
-        <p style={{fontSize:13,color:C.mut,lineHeight:1.7,maxWidth:320,margin:"0 0 28px"}}>
+        <p style={{fontSize:13,color:C.mut,lineHeight:1.7,maxWidth:320,margin:"0 0 24px"}}>
           {slide.body}
         </p>
 
@@ -1052,24 +1084,9 @@ const Onboarding = ({onDone}) => {
         {slide.install&&(
           <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%",maxWidth:320}}>
             {[
-              {
-                icon:"📱",
-                label:"iOS — Safari",
-                steps:["Open in Safari","Tap the Share button ↑","Tap \"Add to Home Screen\"","Tap Add"],
-                color:"#48dbfb",
-              },
-              {
-                icon:"🤖",
-                label:"Android — Chrome",
-                steps:["Open in Chrome","Tap the ⋮ menu","Tap \"Add to Home Screen\"","Tap Install"],
-                color:"#2ecc71",
-              },
-              {
-                icon:"💻",
-                label:"Desktop — Chrome / Edge",
-                steps:["Open in Chrome or Edge","Click the install icon in the address bar","Click Install"],
-                color:"#c8f542",
-              },
+              {icon:"📱",label:"iOS — Safari",    steps:["Open in Safari","Tap the Share button ↑","Tap \"Add to Home Screen\"","Tap Add"],             color:"#48dbfb"},
+              {icon:"🤖",label:"Android — Chrome", steps:["Open in Chrome","Tap the ⋮ menu","Tap \"Add to Home Screen\"","Tap Install"],                color:"#2ecc71"},
+              {icon:"💻",label:"Desktop — Chrome / Edge",steps:["Open in Chrome or Edge","Click the install icon in the address bar","Click Install"], color:"#c8f542"},
             ].map(p=>(
               <div key={p.label} style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:12,padding:"12px 14px",textAlign:"left"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -1088,28 +1105,19 @@ const Onboarding = ({onDone}) => {
         )}
       </div>
 
-      {/* Bottom */}
-      <div style={{padding:"0 28px 48px",display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
-        {/* Dot indicators */}
+      {/* Bottom: dots + CTA */}
+      <div style={{padding:"12px 28px 48px",display:"flex",flexDirection:"column",alignItems:"center",gap:16,flexShrink:0}}>
         <div style={{display:"flex",gap:6}}>
           {SLIDES.map((_,i)=>(
-            <button key={i} onClick={()=>setIdx(i)}
+            <button key={i} onClick={()=>goTo(i, i>idx?-1:1)}
               style={{width:i===idx?20:6,height:6,borderRadius:3,background:i===idx?accentColor:C.bdr,border:"none",padding:0,transition:"all .3s",cursor:"pointer"}}/>
           ))}
         </div>
-
-        {/* CTA button */}
         <button onClick={next}
-          style={{width:"100%",maxWidth:320,background:accentColor,border:"none",borderRadius:14,color:isLast?"#0a0a0c":"#0a0a0c",fontSize:15,fontWeight:800,padding:"16px",fontFamily:"inherit",letterSpacing:.5,boxShadow:`0 0 30px ${accentColor}44`,transition:"all .3s"}}>
-          {slide.cta||(isLast?"Start Training":"Next →")}
+          style={{width:"100%",maxWidth:320,background:accentColor,border:"none",borderRadius:14,color:"#0a0a0c",fontSize:15,fontWeight:800,padding:"16px",fontFamily:"inherit",letterSpacing:.5,boxShadow:`0 0 30px ${accentColor}44`,transition:"all .3s"}}>
+          {slide.cta||(isLast?"Start Training →":"Next →")}
         </button>
-
-        {idx>0&&(
-          <button onClick={()=>setIdx(i=>i-1)}
-            style={{background:"none",border:"none",color:C.mut,fontSize:12,fontWeight:700,padding:"4px",fontFamily:"inherit"}}>
-            ← Back
-          </button>
-        )}
+        <span style={{fontSize:11,color:C.dim}}>{idx+1} of {SLIDES.length}</span>
       </div>
     </div>
   );
