@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23c8f542'/%3E%3Cpath d='M160 128v256M352 128v256M80 192h80M352 192h80M80 320h80M352 320h80M160 256h192' stroke='%230a0a0c' stroke-width='56' stroke-linecap='round'/%3E%3C/svg%3E"/>
-  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23c8f542'/%3E%3Cpath d='M160 128v256M352 128v256M80 192h80M352 192h80M80 320h80M352 320h80M160 256h192' stroke='%230a0a0c' stroke-width='56' stroke-linecap='round'/%3E%3C/svg%3E"/>
   <meta name="theme-color" content="#0a0a0c"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -12,15 +10,50 @@
   <meta name="description" content="FitPR — minimal fitness tracker with personal record tracking."/>
   <title>FitPR</title>
   <script>
-    const manifest = {
-      name:"FitPR", short_name:"FitPR", description:"Minimal fitness & PR tracker",
-      start_url:".", display:"standalone", background_color:"#0a0a0c", theme_color:"#0a0a0c",
-      icons:[{ src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23c8f542'/%3E%3Cpath d='M160 128v256M352 128v256M80 192h80M352 192h80M80 320h80M352 320h80M160 256h192' stroke='%230a0a0c' stroke-width='56' stroke-linecap='round'/%3E%3C/svg%3E", sizes:"any", type:"image/svg+xml" }]
-    };
+    // Favicon — injected as blob URL for cross-browser reliability
     (function(){
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="12" fill="#c8f542"/>
+        <path d="M20 16v32M44 16v32M10 24h10M44 24h10M10 40h10M44 40h10M20 32h24"
+          stroke="#0a0a0c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>`;
+      const blob = new Blob([svg], {type:"image/svg+xml"});
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement("link");
+      link.rel  = "icon";
+      link.type = "image/svg+xml";
+      link.href = url;
+      document.head.appendChild(link);
+
+      // Apple touch icon (PNG canvas fallback for iOS)
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 180;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, 180, 180);
+        const apple = document.createElement("link");
+        apple.rel  = "apple-touch-icon";
+        apple.href = canvas.toDataURL("image/png");
+        document.head.appendChild(apple);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    })();
+
+    // PWA Manifest
+    (function(){
+      const manifest = {
+        name:"FitPR", short_name:"FitPR", description:"Minimal fitness & PR tracker",
+        start_url:".", display:"standalone", background_color:"#0a0a0c", theme_color:"#0a0a0c",
+        icons:[{
+          src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23c8f542'/%3E%3Cpath d='M20 16v32M44 16v32M10 24h10M44 24h10M10 40h10M44 40h10M20 32h24' stroke='%230a0a0c' stroke-width='6' stroke-linecap='round' fill='none'/%3E%3C/svg%3E",
+          sizes:"any", type:"image/svg+xml"
+        }]
+      };
       const b = new Blob([JSON.stringify(manifest)], {type:"application/json"});
       const link = document.createElement("link");
-      link.rel = "manifest";
+      link.rel  = "manifest";
       link.href = URL.createObjectURL(b);
       document.head.appendChild(link);
     })();
