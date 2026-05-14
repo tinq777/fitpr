@@ -418,6 +418,131 @@ const FormCues = ({name}) => {
   );
 };
 
+// ─── Exercise Timer ───────────────────────────────────────────────────────────
+const ExerciseTimer = ({duration, onChangeDuration}) => {
+  const [running, setRunning]   = useState(false);
+  const [remaining, setRemaining] = useState(duration);
+  const [editing, setEditing]   = useState(false);
+  const [draftSecs, setDraftSecs] = useState(duration);
+  const intervalRef = useRef(null);
+  const beepRef     = useRef(null);
+
+  // keep remaining in sync when duration changes externally
+  useEffect(()=>{ if(!running) setRemaining(duration); }, [duration]);
+
+  // countdown tick
+  useEffect(()=>{
+    if(running){
+      intervalRef.current = setInterval(()=>{
+        setRemaining(r=>{
+          if(r<=1){
+            clearInterval(intervalRef.current);
+            setRunning(false);
+            // vibrate
+            if(navigator.vibrate) navigator.vibrate([200,100,200]);
+            // beep via Web Audio
+            try {
+              const ctx = new (window.AudioContext||window.webkitAudioContext)();
+              [0,0.3,0.6].forEach(offset=>{
+                const osc=ctx.createOscillator();
+                const gain=ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value=880;
+                gain.gain.setValueAtTime(0.4,ctx.currentTime+offset);
+                gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+offset+0.25);
+                osc.start(ctx.currentTime+offset);
+                osc.stop(ctx.currentTime+offset+0.25);
+              });
+            } catch(e){}
+            return 0;
+          }
+          return r-1;
+        });
+      },1000);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+    return ()=>clearInterval(intervalRef.current);
+  },[running]);
+
+  const toggle = () => {
+    if(remaining===0){ setRemaining(duration); setTimeout(()=>setRunning(true),50); return; }
+    setRunning(r=>!r);
+  };
+  const reset = () => { setRunning(false); setRemaining(duration); };
+
+  const pct = duration>0 ? remaining/duration : 0;
+  const mins = Math.floor(remaining/60);
+  const secs = remaining%60;
+  const timeStr = mins>0 ? `${mins}:${String(secs).padStart(2,"0")}` : `${secs}s`;
+  const done = remaining===0;
+  const ringColor = done ? C.grn : running ? C.acc : C.mut;
+  const size=52, stroke=4, r=(size-stroke)/2, circ=2*Math.PI*r;
+
+  const saveEdit = () => {
+    const v = Math.max(1, Math.min(3600, parseInt(draftSecs)||30));
+    onChangeDuration(v);
+    setRemaining(v);
+    setRunning(false);
+    setEditing(false);
+  };
+
+  return (
+    <div style={{background:done?C.grnF:running?C.accF:C.bg, border:`1px solid ${done?C.grn+"55":running?C.acc+"44":C.bdr}`, borderRadius:10, padding:"10px 12px", marginBottom:8, display:"flex", alignItems:"center", gap:12, transition:"all .3s"}}>
+      {/* Ring */}
+      <div style={{position:"relative",width:size,height:size,flexShrink:0}} onClick={toggle} style={{cursor:"pointer",position:"relative",width:size,height:size,flexShrink:0}}>
+        <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.bdr} strokeWidth={stroke}/>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={ringColor} strokeWidth={stroke}
+            strokeDasharray={circ} strokeDashoffset={circ*(1-pct)} strokeLinecap="round"
+            style={{transition:running?"stroke-dashoffset 1s linear":"stroke-dashoffset .3s ease"}}/>
+        </svg>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+          <span style={{fontSize:done?16:11,fontWeight:800,color:ringColor,lineHeight:1}}>{done?"✓":timeStr}</span>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{flex:1}}>
+        <div style={{fontSize:10,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>
+          {done?"Complete!":running?"Running…":"Timer"}
+        </div>
+        {editing ? (
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <input type="number" value={draftSecs} onChange={e=>setDraftSecs(e.target.value)}
+              onBlur={saveEdit} onKeyDown={e=>e.key==="Enter"&&saveEdit()}
+              style={{width:64,background:C.sur,border:`1px solid ${C.acc}`,borderRadius:6,color:C.txt,padding:"4px 8px",outline:"none",fontFamily:"inherit",textAlign:"center"}}
+              autoFocus/>
+            <span style={{fontSize:11,color:C.mut}}>seconds</span>
+            <button onClick={saveEdit} style={{background:C.acc,border:"none",borderRadius:6,color:"#0a0a0c",fontSize:11,fontWeight:800,padding:"4px 10px",fontFamily:"inherit"}}>Set</button>
+          </div>
+        ) : (
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <button onClick={toggle}
+              style={{background:done?C.grn:running?C.red:C.acc,border:"none",borderRadius:7,color:"#0a0a0c",fontSize:11,fontWeight:800,padding:"5px 12px",fontFamily:"inherit",transition:"background .2s"}}>
+              {done?"Restart":running?"Stop":"Start"}
+            </button>
+            {(running||done)&&(
+              <button onClick={reset}
+                style={{background:"none",border:`1px solid ${C.bdr}`,borderRadius:7,color:C.mut,fontSize:11,fontWeight:700,padding:"5px 10px",fontFamily:"inherit",transition:"all .15s"}}>
+                Reset
+              </button>
+            )}
+            {!running&&!done&&(
+              <button onClick={()=>{setEditing(true);setDraftSecs(duration);}}
+                style={{background:"none",border:`1px solid ${C.bdr}`,borderRadius:7,color:C.mut,fontSize:11,padding:"5px 8px",display:"flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                {duration}s
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Exercise Card ────────────────────────────────────────────────────────────
 const ExCard = ({exercise,onChange,onDelete,prs}) => {
   const [col,setCol]=useState(false);
   const updSet=(i,u)=>onChange({...exercise,sets:exercise.sets.map((s,j)=>j===i?u:s)});
@@ -425,6 +550,18 @@ const ExCard = ({exercise,onChange,onDelete,prs}) => {
   const addSet=()=>{
     const last=exercise.sets[exercise.sets.length-1]||{reps:10,load:0};
     onChange({...exercise,sets:[...exercise.sets,mkSet(last.reps,last.load)]});
+  };
+  // Timer is visible whenever timerDuration is set — persists across sessions
+  const timerOn = !!(exercise.timerDuration);
+  const toggleTimer=()=>{
+    if(timerOn){
+      // remove timer entirely
+      const {timerDuration:_,...rest}=exercise;
+      onChange(rest);
+    } else {
+      // add timer with default 30s
+      onChange({...exercise,timerDuration:30});
+    }
   };
   const prev=exercise.prevSets||[];
   const done=exercise.sets.filter(s=>s.done).length;
@@ -446,6 +583,13 @@ const ExCard = ({exercise,onChange,onDelete,prs}) => {
             {done}/{exercise.sets.length}
           </span>
         )}
+        {/* Timer toggle */}
+        <button onClick={toggleTimer} title={timerOn?"Remove timer":"Add timer"}
+          style={{background:"none",border:`1px solid ${timerOn?C.war+"88":C.bdr}`,borderRadius:6,color:timerOn?C.war:C.dim,padding:"3px 5px",display:"flex",alignItems:"center",transition:"all .15s",flexShrink:0}}
+          onMouseEnter={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.war+"88";e.currentTarget.style.color=C.war}}}
+          onMouseLeave={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.dim}}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
         <button onClick={()=>setCol(!col)} style={{background:"none",border:"none",color:C.mut,padding:4,fontSize:10}}>{col?"▾":"▴"}</button>
         <button onClick={onDelete} style={{background:"none",border:"none",color:C.dim,padding:4,display:"flex",transition:"color .15s"}}
           onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
@@ -453,6 +597,12 @@ const ExCard = ({exercise,onChange,onDelete,prs}) => {
       {!col && (
         <>
           <FormCues name={exercise.name}/>
+          {/* Timer */}
+          {timerOn&&(
+            <ExerciseTimer
+              duration={exercise.timerDuration||30}
+              onChangeDuration={v=>onChange({...exercise,timerDuration:v})}/>
+          )}
           {prev.length>0&&(
             <div style={{fontSize:9,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6,paddingLeft:28}}>↑ prev session</div>
           )}
