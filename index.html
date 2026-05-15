@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="FitPR"/>
   <meta name="description" content="FitPR — minimal fitness tracker with personal record tracking."/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
   <title>FitPR</title>
   <script>
     // Favicon — injected as blob URL for cross-browser reliability
@@ -136,7 +137,7 @@ const I = {
   tgt:   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
   zap:   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
   trphy: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="8 21 12 17 16 21"/><path d="M5 3H3v5a7 7 0 0014 0V3h-2"/><path d="M5 3h14M12 17v-4"/></svg>,
-  srch:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  copy:  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1001,7 +1002,7 @@ const Ring = ({pct,size=76,stroke=7,color=C.acc,children}) => {
 };
 
 // ─── Workout Tab ──────────────────────────────────────────────────────────────
-const WorkoutTab = ({workout,onChange,onDelete,prs,onPRUpdate}) => {
+const WorkoutTab = ({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate}) => {
   const [editTitle,setEditTitle]=useState(false);
   const [logged,setLogged]=useState(false);
   const [delModal,setDelModal]=useState(false);
@@ -1050,6 +1051,11 @@ const WorkoutTab = ({workout,onChange,onDelete,prs,onPRUpdate}) => {
         }
         <button onClick={()=>setEditTitle(!editTitle)} style={{background:"none",border:"none",color:editTitle?C.acc:C.mut,padding:6,display:"flex"}}>
           {editTitle?I.tick:I.edit}
+        </button>
+        <button onClick={onDuplicate} title="Duplicate workout"
+          style={{background:"none",border:"none",color:C.mut,padding:6,display:"flex",transition:"color .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.color=C.acc} onMouseLeave={e=>e.currentTarget.style.color=C.mut}>
+          {I.copy}
         </button>
         <button onClick={()=>setDelModal(true)} style={{background:"none",border:"none",color:C.dim,padding:6,display:"flex",transition:"color .15s"}}
           onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
@@ -1810,6 +1816,29 @@ function App(){
   const addW=()=>{ const w=mkWork(workouts.length+1); setWorkouts(p=>[...p,w]); goToTab(w.id,-1); };
   const updW=(id,u)=>setWorkouts(p=>p.map(w=>w.id===id?u:w));
   const delW=id=>{ setWorkouts(p=>p.filter(w=>w.id!==id)); goToTab("stats",1); };
+  const dupW=id=>{
+    const src=workouts.find(w=>w.id===id);
+    if(!src) return;
+    // Deep-copy sections, giving every exercise and set a fresh id
+    const copySection=exs=>exs.map(ex=>({
+      ...ex, id:uid(), sessions:[],
+      sets:ex.sets.map(s=>({...s,id:uid(),done:false})),
+      prevSets:[],
+    }));
+    const w={
+      ...src, id:uid(),
+      title:`${src.title} (copy)`,
+      sessions:[],
+      sections:{
+        warmup:    copySection(src.sections.warmup),
+        exercises: copySection(src.sections.exercises),
+        cooldown:  copySection(src.sections.cooldown),
+      },
+    };
+    setWorkouts(p=>[...p,w]);
+    goToTab(w.id,-1);
+    toast(`Duplicated "${src.title}"`);
+  };
 
   const active=workouts.find(w=>w.id===tab);
   const totSess=workouts.reduce((a,w)=>a+w.sessions.length,0);
@@ -1911,7 +1940,7 @@ function App(){
       <div style={{borderTop:`1px solid ${C.bdr}`}} {...swipe} ref={contentRef}>
         <div key={tab} style={{maxWidth:480,margin:"0 auto",padding:"22px 18px 100px",...slideStyle}}>
           {tab==="stats"&&<StatsTab workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} onSetGoal={setWeeklyGoal}/>}
-          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} prs={prs} onPRUpdate={setPrs}/>}
+          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs}/>}
         </div>
       </div>
 
