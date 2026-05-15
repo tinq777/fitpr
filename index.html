@@ -530,21 +530,29 @@ const ExCard=({exercise,onChange,onDelete,prs,dragHandleProps})=>{
     <div className="ex-card" style={{background:C.sur,border:`1px solid ${all?C.grn+"55":C.bdr}`,borderRadius:10,padding:"12px 14px",marginBottom:8,transition:"border-color .3s"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:col?0:10}}>
         {dragHandleProps&&(
-          <div {...dragHandleProps} data-drag-handle="true"
-            onClick={()=>setCol(!col)}
-            title={col?"Expand exercise":"Collapse exercise"}
-            style={{...dragHandleProps.style,color:col?C.mut:C.acc,transition:"color .15s"}}>
+          <div {...dragHandleProps} data-drag-handle="true" style={{...dragHandleProps.style,color:C.dim}}>
             <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>
           </div>
         )}
-        <Inp value={exercise.name} onChange={v=>onChange({...exercise,name:v})} placeholder="Exercise name"
-          style={{fontWeight:600,fontSize:13,background:"transparent",border:"none",borderBottom:`1px solid ${C.bdr}`,borderRadius:0,padding:"3px 0"}}
-          onFocus={e=>e.target.style.borderBottomColor=C.acc} onBlur={e=>e.target.style.borderBottomColor=C.bdr}/>
-        {exercise.sets.length>0&&<span style={{fontSize:9,fontWeight:800,borderRadius:20,padding:"2px 8px",flexShrink:0,background:all?C.grn:C.accF,color:all?"#0a0a0c":C.accD,border:`1px solid ${all?C.grn:C.accD+"44"}`,transition:"all .3s"}}>{done}/{exercise.sets.length}</span>}
-        <button onClick={toggleTimer} title={timerOn?"Remove timer":"Add timer"} style={{background:"none",border:`1px solid ${timerOn?C.war+"88":C.bdr}`,borderRadius:6,color:timerOn?C.war:C.dim,padding:"3px 5px",display:"flex",alignItems:"center",transition:"all .15s",flexShrink:0}} onMouseEnter={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.war+"88";e.currentTarget.style.color=C.war;}}} onMouseLeave={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.dim;}}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        </button>
-        <button onClick={onDelete} style={{background:"none",border:"none",color:C.dim,padding:4,display:"flex",transition:"color .15s"}} onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
+        <div style={{flex:1,minWidth:0}}>
+          <Inp value={exercise.name} onChange={v=>onChange({...exercise,name:v})} placeholder="Exercise name"
+            style={{fontWeight:600,fontSize:13,background:"transparent",border:"none",borderBottom:`1px solid ${C.bdr}`,borderRadius:0,padding:"3px 0"}}
+            onFocus={e=>e.target.style.borderBottomColor=C.acc} onBlur={e=>e.target.style.borderBottomColor=C.bdr}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+          {exercise.sets.length>0&&<span style={{fontSize:9,fontWeight:800,borderRadius:20,padding:"2px 8px",background:all?C.grn:C.accF,color:all?"#0a0a0c":C.accD,border:`1px solid ${all?C.grn:C.accD+"44"}`,transition:"all .3s"}}>{done}/{exercise.sets.length}</span>}
+          <button onClick={toggleTimer} title={timerOn?"Remove timer":"Add timer"} style={{background:"none",border:`1px solid ${timerOn?C.war+"88":C.bdr}`,borderRadius:6,color:timerOn?C.war:C.dim,padding:"3px 5px",display:"flex",alignItems:"center",transition:"all .15s"}} onMouseEnter={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.war+"88";e.currentTarget.style.color=C.war;}}} onMouseLeave={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.dim;}}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </button>
+          <button onClick={onDelete} style={{background:"none",border:"none",color:C.dim,padding:4,display:"flex",transition:"color .15s"}} onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
+          {/* Large collapse arrow on the right */}
+          <button onClick={()=>setCol(!col)}
+            style={{background:"none",border:"none",color:col?C.mut:C.acc,padding:"4px 6px",display:"flex",alignItems:"center",justifyContent:"center",transition:"color .2s, transform .2s",transform:col?"rotate(0deg)":"rotate(180deg)",minWidth:36,minHeight:36}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
       </div>
       {!col&&(
         <>
