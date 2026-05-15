@@ -41,7 +41,7 @@
     #install-banner.show{display:flex}
     .backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
     .modal{background:#111114;border:1px solid #1e1e26;border-radius:14px;padding:24px 22px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.6)}
-    .picker-sheet{background:#111114;border-radius:16px 16px 0 0;width:100%;max-width:480px;display:flex;flex-direction:column;animation:slide-up .25s cubic-bezier(.25,.46,.45,.94) both;max-height:92dvh}
+    .picker-sheet{background:#111114;border-radius:16px 16px 0 0;width:100%;max-width:480px;display:flex;flex-direction:column;animation:slide-up .25s cubic-bezier(.25,.46,.45,.94) both;height:92dvh}
     #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(16px);background:#2ecc71;color:#0a0a0c;font-weight:800;font-size:14px;font-family:'DM Mono',monospace;padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:3000}
     #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
     .tabs{display:flex;gap:3px;overflow-x:auto;scrollbar-width:none}
@@ -529,7 +529,14 @@ const ExCard=({exercise,onChange,onDelete,prs,dragHandleProps})=>{
   return(
     <div className="ex-card" style={{background:C.sur,border:`1px solid ${all?C.grn+"55":C.bdr}`,borderRadius:10,padding:"12px 14px",marginBottom:8,transition:"border-color .3s"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:col?0:10}}>
-        {dragHandleProps&&<div {...dragHandleProps} data-drag-handle="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div>}
+        {dragHandleProps&&(
+          <div {...dragHandleProps} data-drag-handle="true"
+            onClick={()=>setCol(!col)}
+            title={col?"Expand exercise":"Collapse exercise"}
+            style={{...dragHandleProps.style,color:col?C.mut:C.acc,transition:"color .15s"}}>
+            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>
+          </div>
+        )}
         <Inp value={exercise.name} onChange={v=>onChange({...exercise,name:v})} placeholder="Exercise name"
           style={{fontWeight:600,fontSize:13,background:"transparent",border:"none",borderBottom:`1px solid ${C.bdr}`,borderRadius:0,padding:"3px 0"}}
           onFocus={e=>e.target.style.borderBottomColor=C.acc} onBlur={e=>e.target.style.borderBottomColor=C.bdr}/>
@@ -537,7 +544,6 @@ const ExCard=({exercise,onChange,onDelete,prs,dragHandleProps})=>{
         <button onClick={toggleTimer} title={timerOn?"Remove timer":"Add timer"} style={{background:"none",border:`1px solid ${timerOn?C.war+"88":C.bdr}`,borderRadius:6,color:timerOn?C.war:C.dim,padding:"3px 5px",display:"flex",alignItems:"center",transition:"all .15s",flexShrink:0}} onMouseEnter={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.war+"88";e.currentTarget.style.color=C.war;}}} onMouseLeave={e=>{if(!timerOn){e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.dim;}}}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </button>
-        <button onClick={()=>setCol(!col)} style={{background:"none",border:"none",color:C.mut,padding:4,fontSize:10}}>{col?"▾":"▴"}</button>
         <button onClick={onDelete} style={{background:"none",border:"none",color:C.dim,padding:4,display:"flex",transition:"color .15s"}} onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.dim}>{I.trash}</button>
       </div>
       {!col&&(
@@ -595,31 +601,53 @@ const Picker=({onSelect,onClose})=>{
   const ref=useRef();const listRef=useRef();
   useEffect(()=>{setTimeout(()=>ref.current?.focus(),100);},[]);
   useEffect(()=>{if(listRef.current)listRef.current.scrollTop=0;},[q,grp]);
+  const isSearching=q.trim().length>0;
   const groups=Object.keys(LIB);
-  const items=q.trim()?Object.entries(LIB).flatMap(([g,exs])=>exs.filter(e=>e.name.toLowerCase().includes(q.toLowerCase())).map(e=>({e,g}))):LIB[grp].map(e=>({e,g:grp}));
+  const items=isSearching
+    ?Object.entries(LIB).flatMap(([g,exs])=>exs.filter(e=>e.name.toLowerCase().includes(q.toLowerCase())).map(e=>({e,g})))
+    :LIB[grp].map(e=>({e,g:grp}));
   return(
     <div className="backdrop" onClick={onClose} style={{padding:0}}>
       <div className="picker-sheet" onClick={ev=>ev.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px",flexShrink:0}}><div style={{width:36,height:4,borderRadius:2,background:C.bdrL}}/></div>
-        <div style={{padding:"8px 16px 0",flexShrink:0}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <span style={{fontSize:15,fontWeight:800,color:C.txt}}>Exercise Library</span>
+        {/* Drag handle — hidden while searching to save space */}
+        {!isSearching&&<div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px",flexShrink:0}}><div style={{width:36,height:4,borderRadius:2,background:C.bdrL}}/></div>}
+        <div style={{padding:isSearching?"12px 16px 8px":"8px 16px 0",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            {isSearching
+              ?<span style={{fontSize:13,fontWeight:700,color:C.mut}}>{items.length} result{items.length!==1?"s":""}</span>
+              :<span style={{fontSize:15,fontWeight:800,color:C.txt}}>Exercise Library</span>
+            }
             <button onClick={onClose} style={{background:"none",border:"none",color:C.mut,padding:6,display:"flex",minWidth:44,minHeight:44,alignItems:"center",justifyContent:"center"}}>{I.x}</button>
           </div>
-          <div style={{position:"relative",marginBottom:12}}>
+          {/* Search bar */}
+          <div style={{position:"relative",marginBottom:isSearching?6:10}}>
             <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:C.mut,pointerEvents:"none"}}>{I.srch}</span>
-            <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search exercises…" style={{width:"100%",background:C.surH,border:`1px solid ${C.bdr}`,borderRadius:10,color:C.txt,padding:"10px 12px 10px 32px",outline:"none",fontFamily:"inherit"}} onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr}/>
+            <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search exercises…"
+              style={{width:"100%",background:C.surH,border:`1px solid ${isSearching?C.acc:C.bdr}`,borderRadius:10,color:C.txt,padding:"10px 12px 10px 32px",outline:"none",fontFamily:"inherit"}}
+              onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=isSearching?C.acc:C.bdr}/>
+            {isSearching&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.mut,padding:4,display:"flex",cursor:"pointer"}}>{I.x}</button>}
           </div>
-          {!q.trim()&&<div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:12,scrollbarWidth:"none"}}>{groups.map(g=><button key={g} onClick={()=>setGrp(g)} style={{background:grp===g?C.acc:"transparent",color:grp===g?"#0a0a0c":C.mut,border:`1px solid ${grp===g?C.acc:C.bdr}`,borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",minHeight:36}}>{g}</button>)}</div>}
+          {/* Category tabs — hidden while searching */}
+          {!isSearching&&(
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10,scrollbarWidth:"none"}}>
+              {groups.map(g=>(
+                <button key={g} onClick={()=>setGrp(g)} style={{background:grp===g?C.acc:"transparent",color:grp===g?"#0a0a0c":C.mut,border:`1px solid ${grp===g?C.acc:C.bdr}`,borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",minHeight:36}}>{g}</button>
+              ))}
+            </div>
+          )}
         </div>
+        {/* Results list */}
         <div ref={listRef} style={{overflowY:"auto",flex:1,padding:"4px 16px 32px"}}>
-          {items.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:C.mut,fontSize:13}}>No exercises found</div>}
+          {items.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.mut,fontSize:13}}>No exercises found for "<span style={{color:C.txt}}>{q}</span>"</div>}
           {items.map(({e,g})=>(
-            <button key={e.name} onClick={()=>{onSelect(e.name);onClose();}} style={{width:"100%",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:10,color:C.txt,padding:"13px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13,fontWeight:600,transition:"all .15s",textAlign:"left",minHeight:48}} onMouseEnter={ev=>{ev.currentTarget.style.borderColor=C.acc;ev.currentTarget.style.background=C.accF;}} onMouseLeave={ev=>{ev.currentTarget.style.borderColor=C.bdr;ev.currentTarget.style.background="transparent";}}>
+            <button key={e.name} onClick={()=>{onSelect(e.name);onClose();}}
+              style={{width:"100%",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:10,color:C.txt,padding:"13px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13,fontWeight:600,transition:"all .15s",textAlign:"left",minHeight:48}}
+              onMouseEnter={ev=>{ev.currentTarget.style.borderColor=C.acc;ev.currentTarget.style.background=C.accF;}}
+              onMouseLeave={ev=>{ev.currentTarget.style.borderColor=C.bdr;ev.currentTarget.style.background="transparent";}}>
               <span>{e.name}</span>
               <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0}}>
                 {e.cues&&<span style={{fontSize:10,color:C.ice,background:`${C.ice}15`,borderRadius:20,padding:"3px 8px"}}>cues</span>}
-                {q.trim()&&<span style={{fontSize:10,color:C.mut,background:C.surH,borderRadius:20,padding:"3px 8px"}}>{g}</span>}
+                {isSearching&&<span style={{fontSize:10,color:C.mut,background:C.surH,borderRadius:20,padding:"3px 8px"}}>{g}</span>}
               </div>
             </button>
           ))}
