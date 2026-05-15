@@ -71,6 +71,9 @@
     input[type=number]{-moz-appearance:textfield}
     ::-webkit-scrollbar{display:none}
     button{font-family:inherit;cursor:pointer;touch-action:manipulation}
+    /* Prevent long-press text selection on drag handles and cards */
+    [data-drag-handle]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    .ex-card{-webkit-touch-callout:none}
     #install-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:2000;background:#111114;border-top:1px solid #1e1e26;padding:14px 18px 28px;align-items:center;gap:12px}
     #install-banner.show{display:flex}
     .backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
@@ -630,11 +633,11 @@ const ExCard = ({exercise,onChange,onDelete,prs,dragHandleProps}) => {
     return (l>0&&l>=exPR.bestLoad)||(r>0&&r>=exPR.bestReps);
   };
   return (
-    <div style={{background:C.sur,border:`1px solid ${all?C.grn+"55":C.bdr}`,borderRadius:10,padding:"12px 14px",marginBottom:8,transition:"border-color .3s"}}>
+    <div className="ex-card" style={{background:C.sur,border:`1px solid ${all?C.grn+"55":C.bdr}`,borderRadius:10,padding:"12px 14px",marginBottom:8,transition:"border-color .3s"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:col?0:10}}>
         {/* Drag handle */}
         {dragHandleProps && (
-          <div {...dragHandleProps}>
+          <div {...dragHandleProps} data-drag-handle="true">
             <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
               <circle cx="4" cy="3"  r="1.5"/><circle cx="8" cy="3"  r="1.5"/>
               <circle cx="4" cy="8"  r="1.5"/><circle cx="8" cy="8"  r="1.5"/>
@@ -703,15 +706,17 @@ const useDragSort = (items, onReorder) => {
 
   const onDragStart = (idx, e) => {
     e.stopPropagation();
+    if(e.cancelable) e.preventDefault();
     dragging.current = idx;
     dragOver.current = idx;
     startY.current = (e.touches ? e.touches[0].clientY : e.clientY);
-    // Highlight the dragged card
     if (itemEls.current[idx]) {
       itemEls.current[idx].style.opacity = "0.4";
       itemEls.current[idx].style.transition = "none";
     }
     document.body.style.userSelect = "none";
+    document.body.style.webkitUserSelect = "none";
+    document.documentElement.style.webkitUserSelect = "none";
   };
 
   const onDragMove = (e) => {
@@ -750,6 +755,8 @@ const useDragSort = (items, onReorder) => {
       el.style.transition = "";
     });
     document.body.style.userSelect = "";
+    document.body.style.webkitUserSelect = "";
+    document.documentElement.style.webkitUserSelect = "";
     dragging.current = null;
     dragOver.current = null;
     if (from !== to) {
@@ -780,11 +787,14 @@ const useDragSort = (items, onReorder) => {
 
   const handleProps = (idx) => ({
     onMouseDown:  e => onDragStart(idx, e),
-    onTouchStart: e => onDragStart(idx, e),
+    onTouchStart: e => { e.preventDefault(); onDragStart(idx, e); },
     style: {
-      cursor:"grab", touchAction:"none", color:C.dim, padding:"4px 6px",
+      cursor:"grab", touchAction:"none",
+      userSelect:"none", WebkitUserSelect:"none",
+      color:C.dim, padding:"4px 6px",
       display:"flex", alignItems:"center", flexShrink:0,
       transition:"color .15s",
+      WebkitTouchCallout:"none",
     },
     onMouseEnter: e => e.currentTarget.style.color = C.mut,
     onMouseLeave: e => e.currentTarget.style.color = C.dim,
