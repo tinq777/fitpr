@@ -600,7 +600,7 @@ const ExerciseTimer = ({duration, onChangeDuration}) => {
 };
 
 // ─── Exercise Card ────────────────────────────────────────────────────────────
-const ExCard = ({exercise,onChange,onDelete,prs}) => {
+const ExCard = ({exercise,onChange,onDelete,prs,dragHandleProps}) => {
   const [col,setCol]=useState(false);
   const updSet=(i,u)=>onChange({...exercise,sets:exercise.sets.map((s,j)=>j===i?u:s)});
   const delSet=i=>onChange({...exercise,sets:exercise.sets.filter((_,j)=>j!==i)});
@@ -632,6 +632,16 @@ const ExCard = ({exercise,onChange,onDelete,prs}) => {
   return (
     <div style={{background:C.sur,border:`1px solid ${all?C.grn+"55":C.bdr}`,borderRadius:10,padding:"12px 14px",marginBottom:8,transition:"border-color .3s"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:col?0:10}}>
+        {/* Drag handle */}
+        {dragHandleProps && (
+          <div {...dragHandleProps}>
+            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+              <circle cx="4" cy="3"  r="1.5"/><circle cx="8" cy="3"  r="1.5"/>
+              <circle cx="4" cy="8"  r="1.5"/><circle cx="8" cy="8"  r="1.5"/>
+              <circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/>
+            </svg>
+          </div>
+        )}
         <Inp value={exercise.name} onChange={v=>onChange({...exercise,name:v})} placeholder="Exercise name"
           style={{fontWeight:600,fontSize:13,background:"transparent",border:"none",borderBottom:`1px solid ${C.bdr}`,borderRadius:0,padding:"3px 0"}}
           onFocus={e=>e.target.style.borderBottomColor=C.acc} onBlur={e=>e.target.style.borderBottomColor=C.bdr}/>
@@ -677,14 +687,121 @@ const ExCard = ({exercise,onChange,onDelete,prs}) => {
 };
 
 
+// ─── Drag-to-reorder hook ─────────────────────────────────────────────────────
+const useDragSort = (items, onReorder) => {
+  const dragging  = useRef(null);  // index being dragged
+  const dragOver  = useRef(null);  // index currently hovered
+  const listRef   = useRef(null);
+  const ghostRef  = useRef(null);
+  const startY    = useRef(0);
+  const itemEls   = useRef([]);    // DOM refs per item
+
+  const getItemHeight = () => {
+    const el = itemEls.current.find(Boolean);
+    return el ? el.getBoundingClientRect().height + 8 : 80; // 8 = gap
+  };
+
+  const onDragStart = (idx, e) => {
+    e.stopPropagation();
+    dragging.current = idx;
+    dragOver.current = idx;
+    startY.current = (e.touches ? e.touches[0].clientY : e.clientY);
+    // Highlight the dragged card
+    if (itemEls.current[idx]) {
+      itemEls.current[idx].style.opacity = "0.4";
+      itemEls.current[idx].style.transition = "none";
+    }
+    document.body.style.userSelect = "none";
+  };
+
+  const onDragMove = (e) => {
+    if (dragging.current === null) return;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const dy = clientY - startY.current;
+    const h  = getItemHeight();
+    const newIdx = Math.max(0, Math.min(items.length - 1,
+      dragging.current + Math.round(dy / h)));
+    if (newIdx !== dragOver.current) {
+      dragOver.current = newIdx;
+      // Visually shift non-dragged items
+      itemEls.current.forEach((el, i) => {
+        if (!el || i === dragging.current) return;
+        const shift = (() => {
+          const d = dragging.current, o = dragOver.current;
+          if (d < o && i > d && i <= o) return -h;
+          if (d > o && i >= o && i < d) return  h;
+          return 0;
+        })();
+        el.style.transform = `translateY(${shift}px)`;
+        el.style.transition = "transform .18s ease";
+      });
+    }
+  };
+
+  const onDragEnd = () => {
+    if (dragging.current === null) return;
+    const from = dragging.current;
+    const to   = dragOver.current;
+    // Reset styles
+    itemEls.current.forEach(el => {
+      if (!el) return;
+      el.style.opacity = "";
+      el.style.transform = "";
+      el.style.transition = "";
+    });
+    document.body.style.userSelect = "";
+    dragging.current = null;
+    dragOver.current = null;
+    if (from !== to) {
+      const next = [...items];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      onReorder(next);
+    }
+  };
+
+  // Attach global move/end listeners
+  useEffect(() => {
+    const move = e => onDragMove(e);
+    const end  = e => onDragEnd(e);
+    window.addEventListener("touchmove",  move, {passive:true});
+    window.addEventListener("touchend",   end);
+    window.addEventListener("mousemove",  move);
+    window.addEventListener("mouseup",    end);
+    return () => {
+      window.removeEventListener("touchmove",  move);
+      window.removeEventListener("touchend",   end);
+      window.removeEventListener("mousemove",  move);
+      window.removeEventListener("mouseup",    end);
+    };
+  }, [items]);
+
+  const setRef = (idx, el) => { itemEls.current[idx] = el; };
+
+  const handleProps = (idx) => ({
+    onMouseDown:  e => onDragStart(idx, e),
+    onTouchStart: e => onDragStart(idx, e),
+    style: {
+      cursor:"grab", touchAction:"none", color:C.dim, padding:"4px 6px",
+      display:"flex", alignItems:"center", flexShrink:0,
+      transition:"color .15s",
+    },
+    onMouseEnter: e => e.currentTarget.style.color = C.mut,
+    onMouseLeave: e => e.currentTarget.style.color = C.dim,
+  });
+
+  return { listRef, setRef, handleProps };
+};
+
+// ─── Section ──────────────────────────────────────────────────────────────────
 const Section = ({label,icon,color,exercises,onChange,onAdd,onLib,onDel,prs}) => {
   const [collapsed,setCollapsed]=useState(false);
   const total=exercises.length;
   const done=exercises.flatMap(e=>e.sets).filter(s=>s.done).length;
   const totalSets=exercises.flatMap(e=>e.sets).length;
+  const {listRef,setRef,handleProps}=useDragSort(exercises, onChange);
   return (
     <div style={{marginBottom:16}}>
-      {/* Section header — tappable to collapse */}
       <button onClick={()=>setCollapsed(!collapsed)}
         style={{width:"100%",background:"none",border:"none",padding:0,display:"flex",alignItems:"center",gap:8,marginBottom:collapsed?0:12,cursor:"pointer"}}>
         <span style={{color}}>{icon}</span>
@@ -696,11 +813,16 @@ const Section = ({label,icon,color,exercises,onChange,onAdd,onLib,onDel,prs}) =>
       </button>
       {!collapsed&&(
         <>
-          {exercises.map(ex=>(
-            <ExCard key={ex.id} exercise={ex} prs={prs}
-              onChange={u=>onChange(exercises.map(e=>e.id===ex.id?u:e))}
-              onDelete={()=>onDel(ex.id)}/>
-          ))}
+          <div ref={listRef}>
+            {exercises.map((ex,idx)=>(
+              <div key={ex.id} ref={el=>setRef(idx,el)}>
+                <ExCard exercise={ex} prs={prs}
+                  dragHandleProps={handleProps(idx)}
+                  onChange={u=>onChange(exercises.map(e=>e.id===ex.id?u:e))}
+                  onDelete={()=>onDel(ex.id)}/>
+              </div>
+            ))}
+          </div>
           <div style={{display:"flex",gap:6,marginBottom:8}}>
             <button onClick={onLib}
               style={{flex:1,background:C.accF,border:`1px solid ${C.accD}44`,borderRadius:8,color:C.accD,fontSize:11,fontWeight:700,padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s"}}
