@@ -917,7 +917,7 @@ const Picker = ({onSelect,onClose}) => {
 };
 
 // ─── Commence Workout View ────────────────────────────────────────────────────
-const CommenceWorkout = ({workout,onChange,onPRUpdate,prs,onExit}) => {
+const CommenceWorkout = ({workout,onChange,onPRUpdate,prs,onExit,onStopTimer}) => {
   const allEx = [
     ...workout.sections.warmup.map(e=>({...e,sec:"warmup",secLabel:"Warm-Up",secColor:C.war})),
     ...workout.sections.exercises.map(e=>({...e,sec:"exercises",secLabel:"Exercises",secColor:C.acc})),
@@ -965,6 +965,7 @@ const CommenceWorkout = ({workout,onChange,onPRUpdate,prs,onExit}) => {
     toast(hits.length>0?"🏆 New PR"+(hits.length>1?"s":"")+"! "+hits.slice(0,2).join(", ")+(hits.length>2?" +"+(hits.length-2)+" more":""):"Session logged ✓");
     setFinalTime(duration);
     setLogged(true);
+    onStopTimer();
     setTimeout(()=>{ setLogged(false); onExit(); },3000);
   };
 
@@ -1038,7 +1039,7 @@ const CommenceWorkout = ({workout,onChange,onPRUpdate,prs,onExit}) => {
                 {I.log} Log session anyway
               </button>
               {/* Discard */}
-              <button onClick={()=>{ setExitPrompt(false); onExit(); }}
+              <button onClick={()=>{ setExitPrompt(false); onStopTimer(); onExit(); }}
                 style={{background:C.sur,border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,fontWeight:700,padding:"13px",fontFamily:"inherit",transition:"all .15s"}}
                 onMouseEnter={e=>e.currentTarget.style.background=`${C.red}10`} onMouseLeave={e=>e.currentTarget.style.background=C.sur}>
                 Discard &amp; exit
@@ -1257,7 +1258,7 @@ const WorkoutTab = ({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,
 
   return (
     <div>
-      {commenced&&<CommenceWorkout workout={workout} onChange={onChange} onPRUpdate={onPRUpdate} prs={prs} onExit={()=>setCommenced(false)}/>}
+      {commenced&&<CommenceWorkout workout={workout} onChange={onChange} onPRUpdate={onPRUpdate} prs={prs} onExit={()=>setCommenced(false)} onStopTimer={onStopTimer}/>}
       {delModal&&<DelModal title={workout.title} sc={count} onConfirm={onDelete} onCancel={()=>setDelModal(false)}/>}
       {picker&&<Picker onSelect={n=>addLib(picker,n)} onClose={()=>setPicker(null)}/>}
 
