@@ -926,6 +926,7 @@ const CommenceWorkout = ({workout,onChange,onPRUpdate,prs,onExit}) => {
   const [idx,setIdx]=useState(0);
   const [logged,setLogged]=useState(false);
   const [finalTime,setFinalTime]=useState("");
+  const [exitPrompt,setExitPrompt]=useState(false);
   // ── Session timer ──────────────────────────────────────────────────────────
   const [elapsed,setElapsed]=useState(0);
   const startTs=useRef(Date.now());
@@ -1007,6 +1008,51 @@ const CommenceWorkout = ({workout,onChange,onPRUpdate,prs,onExit}) => {
         </div>
       </div>
 
+      {/* Early exit prompt */}
+      {exitPrompt&&(
+        <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,.75)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}
+          onClick={()=>setExitPrompt(false)}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:14,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:"0 24px 60px rgba(0,0,0,.6)"}}>
+            {/* Icon */}
+            <div style={{width:44,height:44,borderRadius:10,background:`${C.war}18`,border:`1px solid ${C.war}44`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.war} strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:8}}>End session early?</div>
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.7,marginBottom:6}}>
+              You're on exercise <span style={{color:C.txt,fontWeight:700}}>{idx+1} of {total}</span>.
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,background:`${C.acc}0d`,border:`1px solid ${C.acc}33`,borderRadius:8,padding:"8px 12px",marginBottom:22}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.acc} strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span style={{fontSize:11,color:C.acc,fontWeight:700}}>{fmtElapsed(elapsed)} elapsed</span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {/* Log anyway */}
+              <button onClick={()=>{ setExitPrompt(false); finishSession(); }}
+                style={{background:C.grn,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"13px",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"opacity .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.opacity=".85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                {I.log} Log session anyway
+              </button>
+              {/* Discard */}
+              <button onClick={()=>{ setExitPrompt(false); onExit(); }}
+                style={{background:C.sur,border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,fontWeight:700,padding:"13px",fontFamily:"inherit",transition:"all .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.background=`${C.red}10`} onMouseLeave={e=>e.currentTarget.style.background=C.sur}>
+                Discard &amp; exit
+              </button>
+              {/* Keep going */}
+              <button onClick={()=>setExitPrompt(false)}
+                style={{background:"none",border:"none",color:C.mut,fontSize:12,fontWeight:700,padding:"8px",fontFamily:"inherit"}}>
+                ← Keep going
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Exercise content */}
       <div style={{flex:1,overflowY:"auto",padding:"0 18px"}}>
         <h2 style={{fontSize:26,fontWeight:800,color:C.txt,marginBottom:4,lineHeight:1.2}}>{liveEx.name||"Exercise"}</h2>
@@ -1054,25 +1100,34 @@ const CommenceWorkout = ({workout,onChange,onPRUpdate,prs,onExit}) => {
             <div style={{fontSize:11,color:C.mut,marginTop:4}}>Total workout time</div>
           </div>
         ):(
-          <div style={{display:"grid",gridTemplateColumns:idx>0?"1fr 2fr":"1fr",gap:8}}>
-            {idx>0&&(
-              <button onClick={prev}
-                style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:10,color:C.mut,fontSize:13,fontWeight:700,padding:"14px",fontFamily:"inherit"}}>
-                ← Back
-              </button>
-            )}
-            {isLast?(
-              <button onClick={finishSession}
-                style={{background:C.grn,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"14px",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                {I.log} Finish & Log Session
-              </button>
-            ):(
-              <button onClick={next}
-                style={{background:C.acc,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"14px",fontFamily:"inherit"}}>
-                Next Exercise →
-              </button>
-            )}
-          </div>
+          <>
+            <div style={{display:"grid",gridTemplateColumns:idx>0?"1fr 2fr":"1fr",gap:8,marginBottom:8}}>
+              {idx>0&&(
+                <button onClick={prev}
+                  style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:10,color:C.mut,fontSize:13,fontWeight:700,padding:"14px",fontFamily:"inherit"}}>
+                  ← Back
+                </button>
+              )}
+              {isLast?(
+                <button onClick={finishSession}
+                  style={{background:C.grn,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"14px",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  {I.log} Finish &amp; Log
+                </button>
+              ):(
+                <button onClick={next}
+                  style={{background:C.acc,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"14px",fontFamily:"inherit"}}>
+                  Next Exercise →
+                </button>
+              )}
+            </div>
+            {/* End session early */}
+            <button onClick={()=>setExitPrompt(true)}
+              style={{width:"100%",background:"transparent",border:`1px solid ${C.red}33`,borderRadius:10,color:C.red,fontSize:12,fontWeight:700,padding:"10px",fontFamily:"inherit",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background=`${C.red}0d`;e.currentTarget.style.borderColor=`${C.red}66`;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=`${C.red}33`;}}>
+              End Session Early
+            </button>
+          </>
         )}
       </div>
     </div>
