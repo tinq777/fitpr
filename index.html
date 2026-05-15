@@ -690,117 +690,95 @@ const ExCard = ({exercise,onChange,onDelete,prs,dragHandleProps}) => {
 };
 
 
-// ─── Drag-to-reorder hook ─────────────────────────────────────────────────────
+// ─── Drag-to-reorder hook (floating card) ────────────────────────────────────
 const useDragSort = (items, onReorder) => {
-  const dragging  = useRef(null);  // index being dragged
-  const dragOver  = useRef(null);  // index currently hovered
-  const listRef   = useRef(null);
-  const ghostRef  = useRef(null);
-  const startY    = useRef(0);
-  const itemEls   = useRef([]);    // DOM refs per item
+  const [dragIdx,  setDragIdx]  = useState(null);
+  const [overIdx,  setOverIdx]  = useState(null);
+  const [floatY,   setFloatY]   = useState(0);
+  const [cardH,    setCardH]    = useState(80);
+  const listRef  = useRef(null);
+  const itemEls  = useRef([]);
+  const st       = useRef({ dragIdx:null, overIdx:null, startClientY:0, elOffsetInList:0, cardH:80 });
 
-  const getItemHeight = () => {
-    const el = itemEls.current.find(Boolean);
-    return el ? el.getBoundingClientRect().height + 8 : 80; // 8 = gap
-  };
+  const setRef = (idx, el) => { itemEls.current[idx] = el; };
 
   const onDragStart = (idx, e) => {
-    e.stopPropagation();
-    if(e.cancelable) e.preventDefault();
-    dragging.current = idx;
-    dragOver.current = idx;
-    startY.current = (e.touches ? e.touches[0].clientY : e.clientY);
-    if (itemEls.current[idx]) {
-      itemEls.current[idx].style.opacity = "0.4";
-      itemEls.current[idx].style.transition = "none";
-    }
+    e.preventDefault(); e.stopPropagation();
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const el = itemEls.current[idx];
+    const listRect = listRef.current ? listRef.current.getBoundingClientRect() : {top:0};
+    const elRect   = el ? el.getBoundingClientRect() : {height:80, top:0};
+    const h = elRect.height + 8;
+    st.current = { dragIdx:idx, overIdx:idx, startClientY:clientY, elOffsetInList:elRect.top - listRect.top, cardH:h };
+    setCardH(h); setDragIdx(idx); setOverIdx(idx); setFloatY(elRect.top - listRect.top);
+    document.body.style.overflow = "hidden";
     document.body.style.userSelect = "none";
     document.body.style.webkitUserSelect = "none";
     document.documentElement.style.webkitUserSelect = "none";
   };
 
-  const onDragMove = (e) => {
-    if (dragging.current === null) return;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const dy = clientY - startY.current;
-    const h  = getItemHeight();
-    const newIdx = Math.max(0, Math.min(items.length - 1,
-      dragging.current + Math.round(dy / h)));
-    if (newIdx !== dragOver.current) {
-      dragOver.current = newIdx;
-      // Visually shift non-dragged items
-      itemEls.current.forEach((el, i) => {
-        if (!el || i === dragging.current) return;
-        const shift = (() => {
-          const d = dragging.current, o = dragOver.current;
-          if (d < o && i > d && i <= o) return -h;
-          if (d > o && i >= o && i < d) return  h;
-          return 0;
-        })();
-        el.style.transform = `translateY(${shift}px)`;
-        el.style.transition = "transform .18s ease";
-      });
-    }
-  };
-
-  const onDragEnd = () => {
-    if (dragging.current === null) return;
-    const from = dragging.current;
-    const to   = dragOver.current;
-    // Reset styles
-    itemEls.current.forEach(el => {
-      if (!el) return;
-      el.style.opacity = "";
-      el.style.transform = "";
-      el.style.transition = "";
-    });
-    document.body.style.userSelect = "";
-    document.body.style.webkitUserSelect = "";
-    document.documentElement.style.webkitUserSelect = "";
-    dragging.current = null;
-    dragOver.current = null;
-    if (from !== to) {
-      const next = [...items];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      onReorder(next);
-    }
-  };
-
-  // Attach global move/end listeners
   useEffect(() => {
-    const move = e => onDragMove(e);
-    const end  = e => onDragEnd(e);
-    window.addEventListener("touchmove",  move, {passive:true});
-    window.addEventListener("touchend",   end);
-    window.addEventListener("mousemove",  move);
-    window.addEventListener("mouseup",    end);
+    const onMove = e => {
+      if (st.current.dragIdx === null) return;
+      if (e.cancelable) e.preventDefault();
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const dy = clientY - st.current.startClientY;
+      const newFloatY = Math.max(0, Math.min((items.length - 1) * st.current.cardH, st.current.elOffsetInList + dy));
+      setFloatY(newFloatY);
+      const newOver = Math.max(0, Math.min(items.length - 1, Math.round(newFloatY / st.current.cardH)));
+      if (newOver !== st.current.overIdx) { st.current.overIdx = newOver; setOverIdx(newOver); }
+    };
+    const onEnd = () => {
+      if (st.current.dragIdx === null) return;
+      const { dragIdx, overIdx } = st.current;
+      st.current.dragIdx = null; st.current.overIdx = null;
+      setDragIdx(null); setOverIdx(null);
+      document.body.style.overflow = "";
+      document.body.style.userSelect = "";
+      document.body.style.webkitUserSelect = "";
+      document.documentElement.style.webkitUserSelect = "";
+      if (dragIdx !== overIdx) {
+        const next = [...items];
+        const [moved] = next.splice(dragIdx, 1);
+        next.splice(overIdx, 0, moved);
+        onReorder(next);
+      }
+    };
+    window.addEventListener("touchmove",  onMove, {passive:false});
+    window.addEventListener("touchend",   onEnd);
+    window.addEventListener("mousemove",  onMove);
+    window.addEventListener("mouseup",    onEnd);
     return () => {
-      window.removeEventListener("touchmove",  move);
-      window.removeEventListener("touchend",   end);
-      window.removeEventListener("mousemove",  move);
-      window.removeEventListener("mouseup",    end);
+      window.removeEventListener("touchmove",  onMove);
+      window.removeEventListener("touchend",   onEnd);
+      window.removeEventListener("mousemove",  onMove);
+      window.removeEventListener("mouseup",    onEnd);
     };
   }, [items]);
 
-  const setRef = (idx, el) => { itemEls.current[idx] = el; };
+  const getShift = (idx) => {
+    if (dragIdx === null || idx === dragIdx) return 0;
+    const d = dragIdx, o = overIdx;
+    if (d < o && idx > d && idx <= o) return -cardH;
+    if (d > o && idx >= o && idx < d) return  cardH;
+    return 0;
+  };
 
   const handleProps = (idx) => ({
     onMouseDown:  e => onDragStart(idx, e),
-    onTouchStart: e => { e.preventDefault(); onDragStart(idx, e); },
+    onTouchStart: e => onDragStart(idx, e),
     style: {
-      cursor:"grab", touchAction:"none",
-      userSelect:"none", WebkitUserSelect:"none",
+      cursor: dragIdx !== null ? "grabbing" : "grab",
+      touchAction:"none", userSelect:"none",
+      WebkitUserSelect:"none", WebkitTouchCallout:"none",
       color:C.dim, padding:"4px 6px",
       display:"flex", alignItems:"center", flexShrink:0,
-      transition:"color .15s",
-      WebkitTouchCallout:"none",
     },
-    onMouseEnter: e => e.currentTarget.style.color = C.mut,
-    onMouseLeave: e => e.currentTarget.style.color = C.dim,
+    onMouseEnter: e => { if(dragIdx===null) e.currentTarget.style.color=C.mut; },
+    onMouseLeave: e => { if(dragIdx===null) e.currentTarget.style.color=C.dim; },
   });
 
-  return { listRef, setRef, handleProps };
+  return { listRef, setRef, handleProps, dragIdx, overIdx, floatY, cardH, getShift };
 };
 
 // ─── Section ──────────────────────────────────────────────────────────────────
@@ -809,7 +787,7 @@ const Section = ({label,icon,color,exercises,onChange,onAdd,onLib,onDel,prs}) =>
   const total=exercises.length;
   const done=exercises.flatMap(e=>e.sets).filter(s=>s.done).length;
   const totalSets=exercises.flatMap(e=>e.sets).length;
-  const {listRef,setRef,handleProps}=useDragSort(exercises, onChange);
+  const {listRef,setRef,handleProps,dragIdx,overIdx,floatY,cardH,getShift}=useDragSort(exercises, onChange);
   return (
     <div style={{marginBottom:16}}>
       <button onClick={()=>setCollapsed(!collapsed)}
@@ -823,15 +801,38 @@ const Section = ({label,icon,color,exercises,onChange,onAdd,onLib,onDel,prs}) =>
       </button>
       {!collapsed&&(
         <>
-          <div ref={listRef}>
+          {/* List container — position:relative so floating card stays inside */}
+          <div ref={listRef} style={{position:"relative", minHeight: dragIdx!==null ? exercises.length*cardH : undefined}}>
             {exercises.map((ex,idx)=>(
-              <div key={ex.id} ref={el=>setRef(idx,el)}>
+              <div key={ex.id} ref={el=>setRef(idx,el)}
+                style={{
+                  transform: dragIdx===null ? "none" : idx===dragIdx ? `translateY(${floatY - idx*cardH}px)` : `translateY(${getShift(idx)}px)`,
+                  transition: idx===dragIdx ? "none" : "transform .2s cubic-bezier(.25,.46,.45,.94)",
+                  zIndex: idx===dragIdx ? 100 : 1,
+                  position: "relative",
+                  opacity: 1,
+                  boxShadow: idx===dragIdx ? "0 8px 32px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3)" : "none",
+                  borderRadius: idx===dragIdx ? 10 : undefined,
+                  scale: idx===dragIdx ? "1.03" : "1",
+                }}>
                 <ExCard exercise={ex} prs={prs}
                   dragHandleProps={handleProps(idx)}
                   onChange={u=>onChange(exercises.map(e=>e.id===ex.id?u:e))}
                   onDelete={()=>onDel(ex.id)}/>
               </div>
             ))}
+            {/* Drop target indicator */}
+            {dragIdx!==null&&overIdx!==null&&overIdx!==dragIdx&&(
+              <div style={{
+                position:"absolute", left:0, right:0,
+                top: overIdx*cardH - 2,
+                height:3, borderRadius:2,
+                background: color, opacity:0.8,
+                pointerEvents:"none",
+                boxShadow:`0 0 8px ${color}`,
+                transition:"top .15s ease",
+              }}/>
+            )}
           </div>
           <div style={{display:"flex",gap:6,marginBottom:8}}>
             <button onClick={onLib}
