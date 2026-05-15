@@ -604,7 +604,7 @@ const ExerciseTimer = ({duration, onChangeDuration}) => {
 
 // ─── Exercise Card ────────────────────────────────────────────────────────────
 const ExCard = ({exercise,onChange,onDelete,prs,dragHandleProps}) => {
-  const [col,setCol]=useState(false);
+  const [col,setCol]=useState(true);
   const updSet=(i,u)=>onChange({...exercise,sets:exercise.sets.map((s,j)=>j===i?u:s)});
   const delSet=i=>onChange({...exercise,sets:exercise.sets.filter((_,j)=>j!==i)});
   const addSet=()=>{
