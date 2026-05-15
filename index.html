@@ -1161,34 +1161,17 @@ const Ring = ({pct,size=76,stroke=7,color=C.acc,children}) => {
 };
 
 // ─── Workout Tab ──────────────────────────────────────────────────────────────
-const WorkoutTab = ({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate}) => {
+const WorkoutTab = ({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,
+                     timerElapsed,timerActive,onStartTimer,onStopTimer,fmtElapsed}) => {
   const [editTitle,setEditTitle]=useState(false);
   const [logged,setLogged]=useState(false);
   const [delModal,setDelModal]=useState(false);
   const [picker,setPicker]=useState(null);
   const [commenced,setCommenced]=useState(false);
-  // Session timer — starts only when user presses Start or Log, not on mount
-  const [elapsed,setElapsed]=useState(0);
-  const [timerActive,setTimerActive]=useState(false);
-  const startTs=useRef(null);
   const titleRef=useRef();
   useEffect(()=>{ if(editTitle) titleRef.current?.focus(); },[editTitle]);
-  useEffect(()=>{
-    if(!timerActive) return;
-    const tick=setInterval(()=>setElapsed(Math.floor((Date.now()-startTs.current)/1000)),1000);
-    return ()=>clearInterval(tick);
-  },[timerActive]);
-  const fmtElapsed=s=>{
-    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
-    if(h>0) return `${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
-    return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
-  };
-  const startTimer=()=>{
-    if(!timerActive){
-      startTs.current=Date.now();
-      setTimerActive(true);
-    }
-  };
+
+  const startTimer=()=>{ if(!timerActive) onStartTimer(); };
 
   const updSec=(sec,exs)=>onChange({...workout,sections:{...workout.sections,[sec]:exs}});
   const addEx=sec=>updSec(sec,[...workout.sections[sec],mkEx()]);
@@ -1196,8 +1179,8 @@ const WorkoutTab = ({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate}) => {
   const delEx=(sec,id)=>updSec(sec,workout.sections[sec].filter(e=>e.id!==id));
 
   const logSession=()=>{
-    startTimer(); // start if not already running
-    const duration=fmtElapsed(Math.floor((Date.now()-(startTs.current||Date.now()))/1000));
+    startTimer();
+    const duration=fmtElapsed(timerActive?timerElapsed:0);
     const {prs:newPRs,hits}=detectPRs(workout.sections,prs);
     onPRUpdate(newPRs);
     const snap={};
@@ -1206,8 +1189,7 @@ const WorkoutTab = ({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate}) => {
     }
     onChange({...workout,sections:snap,sessions:[...workout.sessions,{id:uid(),ts:Date.now(),duration}]});
     setLogged(true);
-    setTimerActive(false);
-    setElapsed(0);
+    onStopTimer();
     toast(hits.length>0?"🏆 New PR"+(hits.length>1?"s":"")+"! "+hits.slice(0,2).join(", ")+(hits.length>2?" +"+(hits.length-2)+" more":""):"Session logged ✓");
     setTimeout(()=>{ setLogged(false); },2500);
   };
@@ -1275,14 +1257,13 @@ const WorkoutTab = ({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate}) => {
 
       {/* Session timer + Start/Log buttons */}
       <div style={{marginTop:8}}>
-        {/* Timer display — only shown once active */}
         {timerActive&&(
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:8}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={logged?C.grn:C.acc} strokeWidth="2" strokeLinecap="round">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
             <span style={{fontSize:12,color:logged?C.grn:C.acc,fontWeight:700,letterSpacing:1,fontVariantNumeric:"tabular-nums"}}>
-              {logged?"Logged!":fmtElapsed(elapsed)}
+              {logged?"Logged!":fmtElapsed(timerElapsed)}
             </span>
           </div>
         )}
@@ -2116,6 +2097,23 @@ function App(){
   const [backupReminder,setBackupReminder]=useState(false);
   const [backupPanel,setBackupPanel]=useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
+  // ── Global session timer — persists across tab switches ──────────────────
+  const [timerActive,setTimerActive]=useState(false);
+  const [timerElapsed,setTimerElapsed]=useState(0);
+  const timerStartTs=useRef(null);
+  useEffect(()=>{
+    if(!timerActive) return;
+    const tick=setInterval(()=>setTimerElapsed(Math.floor((Date.now()-timerStartTs.current)/1000)),1000);
+    return ()=>clearInterval(tick);
+  },[timerActive]);
+  const fmtElapsed=s=>{
+    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+    if(h>0) return `${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+    return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+  };
+  const startTimer=()=>{ if(!timerActive){ timerStartTs.current=Date.now(); setTimerActive(true); setTimerElapsed(0); }};
+  const stopTimer =()=>{ setTimerActive(false); setTimerElapsed(0); timerStartTs.current=null; };
+  // ─────────────────────────────────────────────────────────────────────────
   const contentRef=useRef();
 
   useEffect(()=>{ save({workouts,tab,prs,weeklyGoal,onboarded}); },[workouts,tab,prs,weeklyGoal,onboarded]);
@@ -2277,6 +2275,16 @@ function App(){
               <div style={{position:"absolute",top:5,right:5,width:6,height:6,borderRadius:"50%",background:st.color,boxShadow:`0 0 5px ${st.color}99`}}/>
             </button>
           );})()}
+          {/* Persistent timer pill — visible across all tabs */}
+          {timerActive&&(
+            <div style={{display:"flex",alignItems:"center",gap:5,background:`${C.acc}15`,border:`1px solid ${C.acc}55`,borderRadius:20,padding:"3px 10px",cursor:"pointer"}}
+              onClick={()=>{ if(active) return; goToTab(tabIds[1]||(workouts[0]?.id)||"stats",-1); }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.acc} strokeWidth="2.5" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span style={{fontSize:11,fontWeight:800,color:C.acc,letterSpacing:.5,fontVariantNumeric:"tabular-nums"}}>{fmtElapsed(timerElapsed)}</span>
+            </div>
+          )}
           {totSess>0&&(
             <div style={{background:C.grnF,border:`1px solid ${C.grn}44`,color:C.grn,fontSize:10,fontWeight:800,borderRadius:20,padding:"3px 10px"}}>
               {totSess} sessions
@@ -2312,7 +2320,7 @@ function App(){
       <div style={{borderTop:`1px solid ${C.bdr}`}} {...swipe} ref={contentRef}>
         <div key={tab} style={{maxWidth:480,margin:"0 auto",padding:"22px 18px 100px",...slideStyle}}>
           {tab==="stats"&&<StatsTab workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} onSetGoal={setWeeklyGoal}/>}
-          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs}/>}
+          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs} timerElapsed={timerElapsed} timerActive={timerActive} onStartTimer={startTimer} onStopTimer={stopTimer} fmtElapsed={fmtElapsed}/>}
         </div>
       </div>
 
