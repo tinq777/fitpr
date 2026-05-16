@@ -864,12 +864,11 @@ const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer})=>{
 };
 
 // ── Workout Tab ───────────────────────────────────────────────────────────────
-const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerElapsed,timerActive,activeSessionId,onStartTimer,onStopTimer,fmtElapsed,workouts})=>{
+const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerElapsed,timerActive,activeSessionId,onStartTimer,onStopTimer,fmtElapsed,workouts,commenced,setCommenced})=>{
   const [editTitle,setEditTitle]=useState(false);
   const [logged,setLogged]=useState(false);
   const [delModal,setDelModal]=useState(false);
   const [picker,setPicker]=useState(null);
-  const [commenced,setCommenced]=useState(false);
   const [sessionConflict,setSessionConflict]=useState(false); // prompt when another session is running
   const titleRef=useRef();
   useEffect(()=>{if(editTitle)titleRef.current?.focus();},[editTitle]);
@@ -1223,6 +1222,27 @@ const BackupPanel=({meta,onBackupNow,onSaveFreq,onClose})=>{
   );
 };
 
+// ── SwipeDownHandle ───────────────────────────────────────────────────────────
+const SwipeDownHandle=({onClose})=>{
+  const y0=useRef(null);
+  return(
+    <div
+      onTouchStart={e=>{y0.current=e.touches[0].clientY;}}
+      onTouchMove={e=>{
+        if(y0.current===null)return;
+        const dy=e.touches[0].clientY-y0.current;
+        if(dy>0)e.preventDefault();
+      }}
+      onTouchEnd={e=>{
+        if(y0.current!==null&&e.changedTouches[0].clientY-y0.current>60)onClose();
+        y0.current=null;
+      }}
+      style={{display:"flex",justifyContent:"center",padding:"14px 0 8px",cursor:"grab",touchAction:"none",userSelect:"none"}}>
+      <div style={{width:40,height:5,borderRadius:3,background:C.bdrL}}/>
+    </div>
+  );
+};
+
 // ── Settings Panel ────────────────────────────────────────────────────────────
 const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessions,onClearAllSessions,onClearPRs,onBackupNow,onSaveBackupFreq,onImport,onResetOnboarding,onClose})=>{
   const [confirm,setConfirm]=useState(null);
@@ -1242,19 +1262,8 @@ const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessio
     <div className="backdrop" onClick={onClose} style={{padding:0,zIndex:1100}}>
       <div onClick={e=>e.stopPropagation()}
         style={{background:C.sur,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:480,animation:"slide-up .28s cubic-bezier(.25,.46,.45,.94) both",maxHeight:"92dvh",overflowY:"auto"}}>
-        {/* Drag handle — hold and swipe down to close */}
-        {(()=>{
-          let y0=null,dragging=false;
-          return(
-            <div
-              onTouchStart={e=>{y0=e.touches[0].clientY;dragging=true;}}
-              onTouchMove={e=>{if(!dragging)return;const dy=e.touches[0].clientY-y0;if(dy>0)e.preventDefault();}}
-              onTouchEnd={e=>{if(dragging&&y0!==null&&e.changedTouches[0].clientY-y0>60)onClose();y0=null;dragging=false;}}
-              style={{display:"flex",justifyContent:"center",padding:"14px 0 8px",cursor:"grab",touchAction:"none"}}>
-              <div style={{width:40,height:5,borderRadius:3,background:C.bdrL}}/>
-            </div>
-          );
-        })()}
+        {/* Handle — press and drag down to close */}
+        <SwipeDownHandle onClose={onClose}/>
         <div style={{padding:"10px 20px 40px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:C.acc}}>{I.gear}</span><span style={{fontSize:15,fontWeight:800,color:C.txt}}>Settings</span></div>
@@ -1397,11 +1406,12 @@ function App(){
   // Global session timer
   const [timerActive,setTimerActive]=useState(false);
   const [timerElapsed,setTimerElapsed]=useState(0);
-  const [activeSessionId,setActiveSessionId]=useState(null); // which workout owns the current session
+  const [activeSessionId,setActiveSessionId]=useState(null);
+  const [commenced,setCommenced]=useState(false); // lifted so timer pill can reopen CommenceWorkout // which workout owns the current session
   const timerStartTs=useRef(null);
   useEffect(()=>{if(!timerActive)return;const t=setInterval(()=>setTimerElapsed(Math.floor((Date.now()-timerStartTs.current)/1000)),1000);return()=>clearInterval(t);},[timerActive]);
   const startTimer=(workoutId)=>{if(!timerActive){timerStartTs.current=Date.now();setTimerActive(true);setTimerElapsed(0);setActiveSessionId(workoutId);}};
-  const stopTimer=()=>{setTimerActive(false);setTimerElapsed(0);timerStartTs.current=null;setActiveSessionId(null);};
+  const stopTimer=()=>{setTimerActive(false);setTimerElapsed(0);timerStartTs.current=null;setActiveSessionId(null);setCommenced(false);};
 
   useEffect(()=>{save({workouts,tab,prs,weeklyGoal,onboarded});},[workouts,tab,prs,weeklyGoal,onboarded]);
 
@@ -1463,8 +1473,8 @@ function App(){
           <div><div style={{fontSize:13,fontWeight:800,letterSpacing:1.5,color:C.txt}}>FitPR</div><div style={{fontSize:8,color:C.mut,letterSpacing:2,textTransform:"uppercase"}}>Fitness Tracker</div></div>
           <div style={{flex:1}}/>
           {timerActive&&(
-            <button onClick={()=>{ if(activeSessionId) goToTab(activeSessionId, tab==="stats"||(tabIds.indexOf(tab)<tabIds.indexOf(activeSessionId))?-1:1); }}
-              title="Go to active session"
+            <button onClick={()=>{ if(activeSessionId){ goToTab(activeSessionId, tab==="stats"||(tabIds.indexOf(tab)<tabIds.indexOf(activeSessionId))?-1:1); setCommenced(true); } }}
+              title="Return to active session"
               style={{display:"flex",alignItems:"center",gap:5,background:`${C.acc}15`,border:`1px solid ${C.acc}55`,borderRadius:20,padding:"3px 10px",cursor:"pointer",transition:"all .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.background=`${C.acc}25`;e.currentTarget.style.borderColor=C.acc;}}
               onMouseLeave={e=>{e.currentTarget.style.background=`${C.acc}15`;e.currentTarget.style.borderColor=`${C.acc}55`;}}>
@@ -1493,7 +1503,7 @@ function App(){
       <div style={{borderTop:`1px solid ${C.bdr}`}} {...swipe}>
         <div key={tab} style={{maxWidth:480,margin:"0 auto",padding:"22px 18px 100px",...slideStyle}}>
           {tab==="stats"&&<StatsTab workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} onSetGoal={setWeeklyGoal}/>}
-          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs} timerElapsed={timerElapsed} timerActive={timerActive} activeSessionId={activeSessionId} onStartTimer={startTimer} onStopTimer={stopTimer} fmtElapsed={fmtSecs} workouts={workouts}/>}
+          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs} timerElapsed={timerElapsed} timerActive={timerActive} activeSessionId={activeSessionId} onStartTimer={startTimer} onStopTimer={stopTimer} fmtElapsed={fmtSecs} workouts={workouts} commenced={commenced} setCommenced={setCommenced}/>}
         </div>
       </div>
       {tabIds.length>1&&(
