@@ -879,7 +879,7 @@ const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer,elaps
 };
 
 // ── Workout Tab ───────────────────────────────────────────────────────────────
-const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerElapsed,timerActive,activeSessionId,onStartTimer,onStopTimer,onDiscardSession,fmtElapsed,workouts,commenced,setCommenced,commencedIdx,setCommencedIdx})=>{
+const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerElapsed,timerActive,activeSessionId,onStartTimer,onStopTimer,onDiscardSession,onLogActiveSession,onGoToActiveTab,fmtElapsed,workouts,commenced,setCommenced,commencedIdx,setCommencedIdx})=>{
   const [editTitle,setEditTitle]=useState(false);
   const [logged,setLogged]=useState(false);
   const [delModal,setDelModal]=useState(false);
@@ -902,7 +902,15 @@ const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerEla
     startTimer();
     logSession();
   };
-  const updSec=(sec,exs)=>onChange({...workout,sections:{...workout.sections,[sec]:exs}});
+  const updSec=(sec,exs)=>{
+    const sections={};
+    for(const[k,v]of Object.entries(workout.sections)){
+      sections[k]=k===sec
+        ?exs.map(ex=>({...ex,sets:ex.sets.map(s=>({...s})),prevSets:(ex.prevSets||[]).map(s=>({...s}))}))
+        :v.map(ex=>({...ex,sets:ex.sets.map(s=>({...s})),prevSets:(ex.prevSets||[]).map(s=>({...s}))}));
+    }
+    onChange({...workout,sections});
+  };
   const addEx=sec=>updSec(sec,[...workout.sections[sec],mkEx()]);
   const addLib=(sec,name)=>updSec(sec,[...workout.sections[sec],mkEx(name)]);
   const delEx=(sec,id)=>updSec(sec,workout.sections[sec].filter(e=>e.id!==id));
@@ -941,14 +949,14 @@ const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerEla
               <span style={{color:C.war,fontWeight:700}}>{activeSessionWorkoutTitle}</span> has an active session running ({fmtElapsed(timerElapsed)}). What would you like to do?
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <button onClick={()=>{setSessionConflict(false);onStopTimer();setTimeout(()=>{onStartTimer(workout.id);setCommenced(true);},50);}}
+              <button onClick={()=>{setSessionConflict(false);onGoToActiveTab();onLogActiveSession();}}
                 style={{background:C.grn,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"13px",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                {I.log} Log existing &amp; start new
+                {I.log} Log existing
               </button>
-              <button onClick={()=>{setSessionConflict(false);onDiscardSession();setTimeout(()=>{onStartTimer(workout.id);setCommenced(true);},50);}}
+              <button onClick={()=>{setSessionConflict(false);onGoToActiveTab();onDiscardSession();}}
                 style={{background:C.sur,border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,fontWeight:700,padding:"13px",fontFamily:"inherit",transition:"all .15s"}}
                 onMouseEnter={e=>e.currentTarget.style.background=`${C.red}10`} onMouseLeave={e=>e.currentTarget.style.background=C.sur}>
-                Discard existing &amp; start new
+                Discard &amp; exit session
               </button>
               <button onClick={()=>setSessionConflict(false)}
                 style={{background:"none",border:"none",color:C.mut,fontSize:12,fontWeight:700,padding:"8px",fontFamily:"inherit"}}>
@@ -1438,6 +1446,21 @@ function App(){
 
   const doBackup=()=>{triggerDL({workouts,prs,exportedAt:new Date().toISOString()});const u={...backupMeta,lastBackup:Date.now()};setBackupMeta(u);saveBM(u);setBackupReminder(false);toast("💾 Backup saved to your device");};
   const saveBackupFreq=freq=>{const u={...backupMeta,frequency:freq};setBackupMeta(u);saveBM(u);};
+  const logActiveSession=()=>{
+    if(!activeSessionId)return;
+    const activeWorkout=workouts.find(w=>w.id===activeSessionId);
+    if(!activeWorkout)return;
+    const duration=fmtSecs(timerElapsed);
+    const{prs:newPRs,hits}=detectPRs(activeWorkout.sections,prs);
+    setPrs(newPRs);
+    const snap={};
+    for(const[sec,exs]of Object.entries(activeWorkout.sections)){
+      snap[sec]=exs.map(ex=>({...ex,prevSets:ex.sets.map(s=>({reps:s.reps,load:s.load})),sets:ex.sets.map(s=>({...s,done:false}))}));
+    }
+    updW(activeSessionId,{...activeWorkout,sections:snap,sessions:[...activeWorkout.sessions,{id:uid(),ts:Date.now(),duration}]});
+    toast(hits.length>0?"🏆 New PR"+(hits.length>1?"s":"")+"! "+hits.slice(0,2).join(", ")+(hits.length>2?" +"+(hits.length-2)+" more":""):"Session logged ✓");
+    stopTimer();
+  };
   const discardSession=()=>{
     if(!activeSessionId)return;
     // Reset done flags on the active workout's sets
@@ -1546,7 +1569,7 @@ function App(){
       <div style={{borderTop:`1px solid ${C.bdr}`}} {...swipe}>
         <div key={tab} style={{maxWidth:480,margin:"0 auto",padding:"22px 18px 100px",...slideStyle}}>
           {tab==="stats"&&<StatsTab workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} onSetGoal={setWeeklyGoal}/>}
-          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs} timerElapsed={timerElapsed} timerActive={timerActive} activeSessionId={activeSessionId} onStartTimer={startTimer} onStopTimer={stopTimer} onDiscardSession={discardSession} fmtElapsed={fmtSecs} workouts={workouts} commenced={commenced} setCommenced={setCommenced} commencedIdx={commencedIdx} setCommencedIdx={setCommencedIdx}/>}
+          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs} timerElapsed={timerElapsed} timerActive={timerActive} activeSessionId={activeSessionId} onStartTimer={startTimer} onStopTimer={stopTimer} onDiscardSession={discardSession} onLogActiveSession={logActiveSession} onGoToActiveTab={()=>activeSessionId&&goToTab(activeSessionId,tabIds.indexOf(activeSessionId)<tabIds.indexOf(tab)?1:-1)} fmtElapsed={fmtSecs} workouts={workouts} commenced={commenced} setCommenced={setCommenced} commencedIdx={commencedIdx} setCommencedIdx={setCommencedIdx}/>}
         </div>
       </div>
       {tabIds.length>1&&(
