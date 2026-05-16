@@ -1195,8 +1195,19 @@ const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessio
   const SH=({label})=><div style={{fontSize:9,color:C.mut,fontWeight:800,textTransform:"uppercase",letterSpacing:2,marginTop:20,marginBottom:2}}>{label}</div>;
   return(
     <div className="backdrop" onClick={onClose} style={{padding:0,zIndex:1100}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.sur,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:480,animation:"slide-up .28s cubic-bezier(.25,.46,.45,.94) both",maxHeight:"92dvh",overflowY:"auto"}}>
-        <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:C.bdr}}/></div>
+      <div onClick={e=>e.stopPropagation()}
+        style={{background:C.sur,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:480,animation:"slide-up .28s cubic-bezier(.25,.46,.45,.94) both",maxHeight:"92dvh",overflowY:"auto"}}
+        {...(()=>{
+          let y0=null;
+          return{
+            onTouchStart:e=>{y0=e.touches[0].clientY;},
+            onTouchEnd:e=>{if(y0!==null&&e.changedTouches[0].clientY-y0>60)onClose();y0=null;},
+          };
+        })()}>
+        {/* Drag handle — tap or swipe down to close */}
+        <div onClick={onClose} style={{display:"flex",justifyContent:"center",padding:"12px 0 4px",cursor:"pointer"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:C.bdrL}}/>
+        </div>
         <div style={{padding:"10px 20px 40px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:C.acc}}>{I.gear}</span><span style={{fontSize:15,fontWeight:800,color:C.txt}}>Settings</span></div>
