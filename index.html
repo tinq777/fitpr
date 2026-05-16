@@ -941,11 +941,11 @@ const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerEla
               <span style={{color:C.war,fontWeight:700}}>{activeSessionWorkoutTitle}</span> has an active session running ({fmtElapsed(timerElapsed)}). What would you like to do?
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <button onClick={()=>{setSessionConflict(false);onStopTimer();onStartTimer(workout.id);setCommenced(true);}}
+              <button onClick={()=>{setSessionConflict(false);onStopTimer();setTimeout(()=>{onStartTimer(workout.id);setCommenced(true);},50);}}
                 style={{background:C.grn,border:"none",borderRadius:10,color:"#0a0a0c",fontSize:13,fontWeight:800,padding:"13px",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                 {I.log} Log existing &amp; start new
               </button>
-              <button onClick={()=>{setSessionConflict(false);onDiscardSession();onStartTimer(workout.id);setCommenced(true);}}
+              <button onClick={()=>{setSessionConflict(false);onDiscardSession();setTimeout(()=>{onStartTimer(workout.id);setCommenced(true);},50);}}
                 style={{background:C.sur,border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,fontWeight:700,padding:"13px",fontFamily:"inherit",transition:"all .15s"}}
                 onMouseEnter={e=>e.currentTarget.style.background=`${C.red}10`} onMouseLeave={e=>e.currentTarget.style.background=C.sur}>
                 Discard existing &amp; start new
@@ -1440,6 +1440,7 @@ function App(){
   const saveBackupFreq=freq=>{const u={...backupMeta,frequency:freq};setBackupMeta(u);saveBM(u);};
   const discardSession=()=>{
     if(!activeSessionId)return;
+    // Reset done flags on the active workout's sets
     setWorkouts(p=>p.map(w=>{
       if(w.id!==activeSessionId)return w;
       const sections={};
@@ -1448,7 +1449,13 @@ function App(){
       }
       return{...w,sections};
     }));
-    stopTimer();
+    // Clear timer state directly so the new session can start immediately
+    setTimerActive(false);
+    setTimerElapsed(0);
+    timerStartTs.current=null;
+    setActiveSessionId(null);
+    setCommenced(false);
+    setCommencedIdx(0);
   };
   const clearSessions=id=>{setWorkouts(p=>p.map(w=>w.id===id?{...w,sessions:[]}:w));toast("Sessions cleared");};
   const clearAllSessions=()=>{setWorkouts(p=>p.map(w=>({...w,sessions:[]})));toast("All sessions cleared");};
@@ -1462,7 +1469,15 @@ function App(){
   const swipe=useSwipe(swipeLeft,swipeRight);
 
   const addW=()=>{const w=mkWork(workouts.length+1);setWorkouts(p=>[...p,w]);goToTab(w.id,-1);};
-  const updW=(id,u)=>setWorkouts(p=>p.map(w=>w.id===id?u:w));
+  const updW=(id,u)=>setWorkouts(p=>p.map(w=>{
+    if(w.id!==id)return w;
+    // Deep-copy sections to ensure no shared references between workouts
+    const sections={};
+    for(const[sec,exs]of Object.entries(u.sections)){
+      sections[sec]=exs.map(ex=>({...ex,sets:ex.sets.map(s=>({...s})),prevSets:(ex.prevSets||[]).map(s=>({...s}))}));
+    }
+    return{...u,sections};
+  }));
   const delW=id=>{setWorkouts(p=>p.filter(w=>w.id!==id));goToTab("stats",1);};
   const dupW=id=>{
     const src=workouts.find(w=>w.id===id);if(!src)return;
