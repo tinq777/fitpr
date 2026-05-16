@@ -724,31 +724,28 @@ const Ring=({pct,size=76,stroke=7,color=C.acc,children})=>{
 };
 
 // ── Commence Workout ──────────────────────────────────────────────────────────
-const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer})=>{
+const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer,elapsed,fmtElapsed,startIdx=0,onIdxChange})=>{
   const allEx=[
     ...workout.sections.warmup.map(e=>({...e,sec:"warmup",secLabel:"Warm-Up",secColor:C.war})),
     ...workout.sections.exercises.map(e=>({...e,sec:"exercises",secLabel:"Exercises",secColor:C.acc})),
     ...workout.sections.cooldown.map(e=>({...e,sec:"cooldown",secLabel:"Cool Down",secColor:C.ice})),
   ];
-  const [idx,setIdx]=useState(0);
+  const [idx,setIdx]=useState(startIdx);
   const [logged,setLogged]=useState(false);
   const [finalTime,setFinalTime]=useState("");
   const [exitPrompt,setExitPrompt]=useState(false);
-  const [elapsed,setElapsed]=useState(0);
   const [slideDir,setSDir]=useState(0);
-  const startTs=useRef(Date.now());
-  useEffect(()=>{const t=setInterval(()=>setElapsed(Math.floor((Date.now()-startTs.current)/1000)),1000);return()=>clearInterval(t);},[]);
   const total=allEx.length;
   const cur=allEx[idx]||allEx[0];
   const isLast=idx===total-1;
-  const goTo=(n,dir)=>{if(n<0||n>=total)return;setSDir(dir);setIdx(n);setTimeout(()=>setSDir(0),280);};
+  const goTo=(n,dir)=>{if(n<0||n>=total)return;setSDir(dir);setIdx(n);onIdxChange&&onIdxChange(n);setTimeout(()=>setSDir(0),280);};
   const next=()=>goTo(idx+1,-1);
   const prev=()=>goTo(idx-1,1);
   const exSwipe=useSwipe(()=>{if(!isLast)goTo(idx+1,-1);},()=>{if(idx>0)goTo(idx-1,1);});
   const slideStyle={animation:slideDir!==0?`slide-in-${slideDir<0?"left":"right"} 0.24s cubic-bezier(.25,.46,.45,.94) both`:"none"};
   const updateEx=updated=>{const sec=cur.sec;const exs=workout.sections[sec].map(e=>e.id===cur.id?updated:e);onChange({...workout,sections:{...workout.sections,[sec]:exs}});};
   const finishSession=()=>{
-    const duration=fmtSecs(Math.floor((Date.now()-startTs.current)/1000));
+    const duration=fmtElapsed(elapsed);
     const{prs:newPRs,hits}=detectPRs(workout.sections,prs);
     onPRUpdate(newPRs);
     const snap={};
@@ -763,6 +760,17 @@ const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer})=>{
   const isPR=s=>{if(!exPR)return false;if(!liveEx.prevSets||liveEx.prevSets.length===0)return false;const l=parseFloat(s.load)||0,r=parseInt(s.reps)||0;return(l>0&&l>=exPR.bestLoad)||(r>0&&r>=exPR.bestReps);};
   const doneSets=liveEx.sets.filter(s=>s.done).length;
   const allDone=liveEx.sets.length>0&&doneSets===liveEx.sets.length;
+  const prevAllDone=useRef(false);
+
+  // Auto-advance when all sets completed
+  useEffect(()=>{
+    if(allDone&&!prevAllDone.current&&!isLast){
+      prevAllDone.current=true;
+      setTimeout(()=>{ goTo(idx+1,-1); prevAllDone.current=false; },900);
+    } else if(!allDone){
+      prevAllDone.current=false;
+    }
+  },[allDone,isLast,idx]);
   return(
     <div style={{position:"fixed",inset:0,zIndex:500,background:C.bg,display:"flex",flexDirection:"column",fontFamily:"'DM Mono','Courier New',monospace",overflow:"hidden"}}>
       {/* Completion overlay */}
@@ -864,7 +872,7 @@ const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer})=>{
 };
 
 // ── Workout Tab ───────────────────────────────────────────────────────────────
-const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerElapsed,timerActive,activeSessionId,onStartTimer,onStopTimer,fmtElapsed,workouts,commenced,setCommenced})=>{
+const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerElapsed,timerActive,activeSessionId,onStartTimer,onStopTimer,fmtElapsed,workouts,commenced,setCommenced,commencedIdx,setCommencedIdx})=>{
   const [editTitle,setEditTitle]=useState(false);
   const [logged,setLogged]=useState(false);
   const [delModal,setDelModal]=useState(false);
@@ -910,7 +918,7 @@ const WorkoutTab=({workout,onChange,onDelete,onDuplicate,prs,onPRUpdate,timerEla
   const last=count>0?workout.sessions[workout.sessions.length-1]:null;
   return(
     <div>
-      {commenced&&<CommenceWorkout workout={workout} onChange={onChange} onPRUpdate={onPRUpdate} prs={prs} onExit={()=>setCommenced(false)} onStopTimer={onStopTimer}/>}
+      {commenced&&<CommenceWorkout workout={workout} onChange={onChange} onPRUpdate={onPRUpdate} prs={prs} onExit={()=>setCommenced(false)} onStopTimer={onStopTimer} elapsed={timerElapsed} fmtElapsed={fmtElapsed} startIdx={commencedIdx} onIdxChange={setCommencedIdx}/>}
       {delModal&&<DelModal title={workout.title} sc={count} onConfirm={onDelete} onCancel={()=>setDelModal(false)}/>}
       {picker&&<Picker onSelect={n=>addLib(picker,n)} onClose={()=>setPicker(null)}/>}
 
@@ -1407,11 +1415,12 @@ function App(){
   const [timerActive,setTimerActive]=useState(false);
   const [timerElapsed,setTimerElapsed]=useState(0);
   const [activeSessionId,setActiveSessionId]=useState(null);
-  const [commenced,setCommenced]=useState(false); // lifted so timer pill can reopen CommenceWorkout // which workout owns the current session
+  const [commenced,setCommenced]=useState(false);
+  const [commencedIdx,setCommencedIdx]=useState(0); // which workout owns the current session
   const timerStartTs=useRef(null);
   useEffect(()=>{if(!timerActive)return;const t=setInterval(()=>setTimerElapsed(Math.floor((Date.now()-timerStartTs.current)/1000)),1000);return()=>clearInterval(t);},[timerActive]);
   const startTimer=(workoutId)=>{if(!timerActive){timerStartTs.current=Date.now();setTimerActive(true);setTimerElapsed(0);setActiveSessionId(workoutId);}};
-  const stopTimer=()=>{setTimerActive(false);setTimerElapsed(0);timerStartTs.current=null;setActiveSessionId(null);setCommenced(false);};
+  const stopTimer=()=>{setTimerActive(false);setTimerElapsed(0);timerStartTs.current=null;setActiveSessionId(null);setCommenced(false);setCommencedIdx(0);};
 
   useEffect(()=>{save({workouts,tab,prs,weeklyGoal,onboarded});},[workouts,tab,prs,weeklyGoal,onboarded]);
 
@@ -1503,7 +1512,7 @@ function App(){
       <div style={{borderTop:`1px solid ${C.bdr}`}} {...swipe}>
         <div key={tab} style={{maxWidth:480,margin:"0 auto",padding:"22px 18px 100px",...slideStyle}}>
           {tab==="stats"&&<StatsTab workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} onSetGoal={setWeeklyGoal}/>}
-          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs} timerElapsed={timerElapsed} timerActive={timerActive} activeSessionId={activeSessionId} onStartTimer={startTimer} onStopTimer={stopTimer} fmtElapsed={fmtSecs} workouts={workouts} commenced={commenced} setCommenced={setCommenced}/>}
+          {active&&<WorkoutTab workout={active} onChange={u=>updW(active.id,u)} onDelete={()=>delW(active.id)} onDuplicate={()=>dupW(active.id)} prs={prs} onPRUpdate={setPrs} timerElapsed={timerElapsed} timerActive={timerActive} activeSessionId={activeSessionId} onStartTimer={startTimer} onStopTimer={stopTimer} fmtElapsed={fmtSecs} workouts={workouts} commenced={commenced} setCommenced={setCommenced} commencedIdx={commencedIdx} setCommencedIdx={setCommencedIdx}/>}
         </div>
       </div>
       {tabIds.length>1&&(
