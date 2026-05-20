@@ -743,7 +743,16 @@ const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer,elaps
   const prev=()=>goTo(idx-1,1);
   const exSwipe=useSwipe(()=>{if(!isLast)goTo(idx+1,-1);},()=>{if(idx>0)goTo(idx-1,1);});
   const slideStyle={animation:slideDir!==0?`slide-in-${slideDir<0?"left":"right"} 0.24s cubic-bezier(.25,.46,.45,.94) both`:"none"};
-  const updateEx=updated=>{const sec=cur.sec;const exs=workout.sections[sec].map(e=>e.id===cur.id?updated:e);onChange({...workout,sections:{...workout.sections,[sec]:exs}});};
+  const updateEx=updated=>{
+    const sec=cur.sec;
+    const sections={};
+    for(const[k,v]of Object.entries(workout.sections)){
+      sections[k]=k===sec
+        ?v.map(e=>e.id===cur.id?updated:{...e,sets:e.sets.map(s=>({...s})),prevSets:(e.prevSets||[]).map(s=>({...s}))})
+        :v.map(e=>({...e,sets:e.sets.map(s=>({...s})),prevSets:(e.prevSets||[]).map(s=>({...s}))}));
+    }
+    onChange({...workout,sections});
+  };
   const resetSets=()=>{
     const snap={};
     for(const[sec,exs]of Object.entries(workout.sections)){
@@ -1426,16 +1435,67 @@ function App(){
   const [backupReminder,setBackupReminder]=useState(false);
   const [backupPanel,setBackupPanel]=useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
-  // Global session timer
-  const [timerActive,setTimerActive]=useState(false);
-  const [timerElapsed,setTimerElapsed]=useState(0);
-  const [activeSessionId,setActiveSessionId]=useState(null);
+  // Global session timer — survives app backgrounding via localStorage + visibilitychange
+  const TIMER_KEY="fitpr_session_ts";
+  const [timerActive,setTimerActive]=useState(()=>{
+    // Restore active session if app was backgrounded
+    const stored=localStorage.getItem(TIMER_KEY);
+    return !!stored;
+  });
+  const [timerElapsed,setTimerElapsed]=useState(()=>{
+    const stored=localStorage.getItem(TIMER_KEY);
+    return stored?Math.floor((Date.now()-parseInt(stored))/1000):0;
+  });
+  const [activeSessionId,setActiveSessionId]=useState(()=>{
+    return localStorage.getItem("fitpr_session_wid")||null;
+  });
   const [commenced,setCommenced]=useState(false);
-  const [commencedIdx,setCommencedIdx]=useState(0); // which workout owns the current session
-  const timerStartTs=useRef(null);
-  useEffect(()=>{if(!timerActive)return;const t=setInterval(()=>setTimerElapsed(Math.floor((Date.now()-timerStartTs.current)/1000)),1000);return()=>clearInterval(t);},[timerActive]);
-  const startTimer=(workoutId)=>{if(!timerActive){timerStartTs.current=Date.now();setTimerActive(true);setTimerElapsed(0);setActiveSessionId(workoutId);}};
-  const stopTimer=()=>{setTimerActive(false);setTimerElapsed(0);timerStartTs.current=null;setActiveSessionId(null);setCommenced(false);setCommencedIdx(0);};
+  const [commencedIdx,setCommencedIdx]=useState(0);
+  const timerStartTs=useRef(
+    localStorage.getItem(TIMER_KEY)?parseInt(localStorage.getItem(TIMER_KEY)):null
+  );
+
+  // Tick every second based on wall clock
+  useEffect(()=>{
+    if(!timerActive)return;
+    const tick=()=>{ if(timerStartTs.current) setTimerElapsed(Math.floor((Date.now()-timerStartTs.current)/1000)); };
+    tick(); // immediate update in case we just returned from background
+    const t=setInterval(tick,1000);
+    return()=>clearInterval(t);
+  },[timerActive]);
+
+  // On visibility change (return from another app) — resync elapsed from wall clock
+  useEffect(()=>{
+    const onVisible=()=>{
+      if(document.visibilityState==="visible"&&timerActive&&timerStartTs.current){
+        setTimerElapsed(Math.floor((Date.now()-timerStartTs.current)/1000));
+      }
+    };
+    document.addEventListener("visibilitychange",onVisible);
+    return()=>document.removeEventListener("visibilitychange",onVisible);
+  },[timerActive]);
+
+  const startTimer=(workoutId)=>{
+    if(!timerActive){
+      const ts=Date.now();
+      timerStartTs.current=ts;
+      localStorage.setItem(TIMER_KEY,String(ts));
+      localStorage.setItem("fitpr_session_wid",workoutId);
+      setTimerActive(true);
+      setTimerElapsed(0);
+      setActiveSessionId(workoutId);
+    }
+  };
+  const stopTimer=()=>{
+    setTimerActive(false);
+    setTimerElapsed(0);
+    timerStartTs.current=null;
+    localStorage.removeItem(TIMER_KEY);
+    localStorage.removeItem("fitpr_session_wid");
+    setActiveSessionId(null);
+    setCommenced(false);
+    setCommencedIdx(0);
+  };
 
   useEffect(()=>{save({workouts,tab,prs,weeklyGoal,onboarded});},[workouts,tab,prs,weeklyGoal,onboarded]);
 
@@ -1476,6 +1536,8 @@ function App(){
     setTimerActive(false);
     setTimerElapsed(0);
     timerStartTs.current=null;
+    localStorage.removeItem("fitpr_session_ts");
+    localStorage.removeItem("fitpr_session_wid");
     setActiveSessionId(null);
     setCommenced(false);
     setCommencedIdx(0);
@@ -1539,7 +1601,12 @@ function App(){
           <div><div style={{fontSize:13,fontWeight:800,letterSpacing:1.5,color:C.txt}}>FitPR</div><div style={{fontSize:8,color:C.mut,letterSpacing:2,textTransform:"uppercase"}}>Fitness Tracker</div></div>
           <div style={{flex:1}}/>
           {timerActive&&(
-            <button onClick={()=>{ if(activeSessionId){ goToTab(activeSessionId, tab==="stats"||(tabIds.indexOf(tab)<tabIds.indexOf(activeSessionId))?-1:1); setCommenced(true); } }}
+            <button onClick={()=>{
+              if(activeSessionId){
+                goToTab(activeSessionId, tab==="stats"||(tabIds.indexOf(tab)<tabIds.indexOf(activeSessionId))?-1:1);
+                setTimeout(()=>setCommenced(true), 50);
+              }
+            }}
               title="Return to active session"
               style={{display:"flex",alignItems:"center",gap:5,background:`${C.acc}15`,border:`1px solid ${C.acc}55`,borderRadius:20,padding:"3px 10px",cursor:"pointer",transition:"all .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.background=`${C.acc}25`;e.currentTarget.style.borderColor=C.acc;}}
