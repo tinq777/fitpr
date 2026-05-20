@@ -776,17 +776,18 @@ const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer,elaps
   const isPR=s=>{if(!exPR)return false;if(!liveEx.prevSets||liveEx.prevSets.length===0)return false;const l=parseFloat(s.load)||0,r=parseInt(s.reps)||0;return(l>0&&l>=exPR.bestLoad)||(r>0&&r>=exPR.bestReps);};
   const doneSets=liveEx.sets.filter(s=>s.done).length;
   const allDone=liveEx.sets.length>0&&doneSets===liveEx.sets.length;
-  const prevAllDone=useRef(false);
+  const justCompletedRef=useRef(false);
 
-  // Auto-advance when all sets completed
+  // Auto-advance only when user actively ticks the final set
+  // Not when navigating back to an already-completed exercise
   useEffect(()=>{
-    if(allDone&&!prevAllDone.current&&!isLast){
-      prevAllDone.current=true;
-      setTimeout(()=>{ goTo(idx+1,-1); prevAllDone.current=false; },900);
-    } else if(!allDone){
-      prevAllDone.current=false;
+    if(allDone&&justCompletedRef.current&&!isLast){
+      justCompletedRef.current=false;
+      const t=setTimeout(()=>goTo(idx+1,-1),900);
+      return()=>clearTimeout(t);
     }
-  },[allDone,isLast,idx]);
+    if(!allDone) justCompletedRef.current=false;
+  },[allDone]);
   return(
     <div style={{position:"fixed",inset:0,zIndex:500,background:C.bg,display:"flex",flexDirection:"column",fontFamily:"'DM Mono','Courier New',monospace",overflow:"hidden"}}>
       {/* Completion overlay */}
@@ -861,7 +862,14 @@ const CommenceWorkout=({workout,onChange,onPRUpdate,prs,onExit,onStopTimer,elaps
           <div style={{marginBottom:12}}>
             {liveEx.sets.map((s,i)=>(
               <SetRow key={s.id} set={s} idx={i} prevSet={(liveEx.prevSets||[])[i]||null} isPR={isPR(s)}
-                onChange={u=>updateEx({...liveEx,sets:liveEx.sets.map((ss,j)=>j===i?u:ss)})}
+                onChange={u=>{
+                  // Track if user just completed the last remaining set
+                  if(u.done&&!s.done){
+                    const willBeAllDone=liveEx.sets.filter((ss,j)=>j===i?true:ss.done).length===liveEx.sets.length;
+                    if(willBeAllDone) justCompletedRef.current=true;
+                  }
+                  updateEx({...liveEx,sets:liveEx.sets.map((ss,j)=>j===i?u:ss)});
+                }}
                 onDelete={()=>updateEx({...liveEx,sets:liveEx.sets.filter((_,j)=>j!==i)})}/>
             ))}
             <button onClick={()=>{const last=liveEx.sets[liveEx.sets.length-1]||{reps:10,load:0};updateEx({...liveEx,sets:[...liveEx.sets,mkSet(last.reps,last.load)]});}} style={{background:C.accF,border:`1px dashed ${C.accD}`,borderRadius:6,color:C.accD,fontSize:11,fontWeight:600,padding:"6px 12px",marginTop:4,display:"flex",alignItems:"center",gap:5}}>{I.plus} Add set</button>
