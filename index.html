@@ -1338,14 +1338,32 @@ const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessio
 
           <SH label="Backup"/>
           <div style={{background:C.bg,borderRadius:10,padding:"0 14px",marginBottom:4}}>
-            <div style={{padding:"12px 0",borderBottom:`1px solid ${C.bdr}`}}>
-              <div style={{fontSize:9,color:C.mut,fontWeight:800,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Reminder Frequency</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {freqOpts.map(o=><button key={o.v} onClick={()=>onSaveBackupFreq(o.v)} style={{background:backupMeta.frequency===o.v?C.acc:C.sur,border:`1px solid ${backupMeta.frequency===o.v?C.acc:C.bdr}`,borderRadius:8,color:backupMeta.frequency===o.v?"#0a0a0c":C.mut,fontSize:11,fontWeight:700,padding:"5px 10px",transition:"all .15s",fontFamily:"inherit"}}>{o.l}</button>)}
-              </div>
-            </div>
-            <Row label="Backup Now" sub={backupMeta.lastBackup?`Last: ${fmtBD(backupMeta.lastBackup)}`:"Never backed up"} right="↓" onClick={onBackupNow}/>
-            <Row label="Restore from Backup" sub="Import a .json backup file" right="↑" onClick={()=>importRef.current?.click()}/>
+            {sbUser?(
+              /* Cloud sync active — simplified backup section */
+              <>
+                <div style={{padding:"12px 0",borderBottom:`1px solid ${C.bdr}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:C.grn,flexShrink:0}}/>
+                    <span style={{fontSize:12,fontWeight:700,color:C.grn}}>Cloud sync is active</span>
+                  </div>
+                  <div style={{fontSize:10,color:C.mut,lineHeight:1.6}}>Your data syncs automatically. Manual backup is optional but still available as an extra safety net.</div>
+                </div>
+                <Row label="Download Backup" sub={backupMeta.lastBackup?`Last: ${fmtBD(backupMeta.lastBackup)}`:"Never downloaded"} right="↓" onClick={onBackupNow}/>
+                <Row label="Restore from Backup" sub="Import a .json backup file" right="↑" onClick={()=>importRef.current?.click()}/>
+              </>
+            ):(
+              /* No cloud sync — show full backup controls */
+              <>
+                <div style={{padding:"12px 0",borderBottom:`1px solid ${C.bdr}`}}>
+                  <div style={{fontSize:9,color:C.mut,fontWeight:800,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Reminder Frequency</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {freqOpts.map(o=><button key={o.v} onClick={()=>onSaveBackupFreq(o.v)} style={{background:backupMeta.frequency===o.v?C.acc:C.sur,border:`1px solid ${backupMeta.frequency===o.v?C.acc:C.bdr}`,borderRadius:8,color:backupMeta.frequency===o.v?"#0a0a0c":C.mut,fontSize:11,fontWeight:700,padding:"5px 10px",transition:"all .15s",fontFamily:"inherit"}}>{o.l}</button>)}
+                  </div>
+                </div>
+                <Row label="Backup Now" sub={backupMeta.lastBackup?`Last: ${fmtBD(backupMeta.lastBackup)}`:"Never backed up"} right="↓" onClick={onBackupNow}/>
+                <Row label="Restore from Backup" sub="Import a .json backup file" right="↑" onClick={()=>importRef.current?.click()}/>
+              </>
+            )}
             <input ref={importRef} type="file" accept=".json" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{onImport(JSON.parse(ev.target.result));onClose();}catch{toast("⚠️ Invalid backup file");}};reader.readAsText(file);e.target.value="";}}/>
           </div>
           <SH label="App"/>
