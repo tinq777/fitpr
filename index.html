@@ -1464,16 +1464,19 @@ const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
   const [email, setEmail]   = useState("");
   const [sent,  setSent]    = useState(false);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
   const sendMagicLink = async () => {
-    if (!email.trim() || !sb) return;
+    if (!email.trim()) return;
+    if (!sb) { setErr("Cloud sync is not configured. Check Cloudflare environment variables."); return; }
     setLoading(true);
+    setErr("");
     const { error } = await sb.auth.signInWithOtp({
       email: email.trim(),
       options: { emailRedirectTo: "https://fitpr.pages.dev" },
     });
     setLoading(false);
-    if (error) { toast("⚠️ " + error.message); }
+    if (error) { setErr(error.message); }
     else { setSent(true); }
   };
 
@@ -1488,6 +1491,12 @@ const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
     if (h < 24) return `Synced ${h}h ago`;
     return `Synced ${Math.floor(h / 24)}d ago`;
   };
+
+  if (!sb) return (
+    <div style={{background:C.bg,borderRadius:10,padding:"12px 14px"}}>
+      <div style={{fontSize:11,color:C.war,lineHeight:1.6}}>⚠️ Cloud sync requires Cloudflare Pages environment variables <span style={{color:C.txt,fontWeight:700}}>SUPABASE_URL</span> and <span style={{color:C.txt,fontWeight:700}}>SUPABASE_ANON</span> to be set. Manual backup still works.</div>
+    </div>
+  );
 
   if (user) return (
     <div style={{background:C.bg,borderRadius:10,padding:"12px 14px"}}>
@@ -1510,18 +1519,19 @@ const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
       <div style={{fontSize:28,marginBottom:10}}>📬</div>
       <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6}}>Check your email</div>
       <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>A sign-in link was sent to <span style={{color:C.acc,fontWeight:700}}>{email}</span>. Tap it to sign in — no password needed.</div>
-      <button onClick={()=>{setSent(false);setEmail("");}} style={{background:"none",border:"none",color:C.mut,fontSize:11,fontWeight:700,padding:"4px",fontFamily:"inherit"}}>Use a different email</button>
+      <button onClick={()=>{setSent(false);setEmail("");setErr("");}} style={{background:"none",border:"none",color:C.mut,fontSize:11,fontWeight:700,padding:"4px",fontFamily:"inherit"}}>Use a different email</button>
     </div>
   );
 
   return (
     <div style={{background:C.bg,borderRadius:10,padding:"12px 14px"}}>
       <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>Sign in to automatically back up your workouts and PRs to the cloud. One-time sign in — stays signed in forever.</div>
-      <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+      <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}}
         placeholder="your@email.com"
         onKeyDown={e=>e.key==="Enter"&&sendMagicLink()}
-        style={{width:"100%",background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"10px 12px",marginBottom:8,outline:"none",fontFamily:"inherit",transition:"border-color .15s"}}
-        onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr}/>
+        style={{width:"100%",background:C.sur,border:`1px solid ${err?C.red:C.bdr}`,borderRadius:8,color:C.txt,padding:"10px 12px",marginBottom:8,outline:"none",fontFamily:"inherit",transition:"border-color .15s"}}
+        onFocus={e=>e.target.style.borderColor=err?C.red:C.acc} onBlur={e=>e.target.style.borderColor=err?C.red:C.bdr}/>
+      {err&&<div style={{fontSize:10,color:C.red,marginBottom:8,lineHeight:1.5}}>{err}</div>}
       <button onClick={sendMagicLink} disabled={loading||!email.trim()}
         style={{width:"100%",background:email.trim()?C.acc:"#2a2a36",border:"none",borderRadius:8,color:email.trim()?"#0a0a0c":C.dim,fontSize:13,fontWeight:800,padding:"11px",fontFamily:"inherit",transition:"all .2s",cursor:email.trim()?"pointer":"default"}}>
         {loading?"Sending…":"Send Sign-In Link"}
