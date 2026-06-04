@@ -1334,7 +1334,7 @@ const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessio
             <Row label="Clear All PRs" sub={totPRs>0?`${totPRs} records stored`:"No PRs recorded yet"} right={totPRs>0?"⚠️":null} danger={totPRs>0} onClick={totPRs>0?()=>setConfirm("prs"):null}/>
           </div>
           <SH label="Cloud Sync"/>
-          <SyncPanel user={sbUser} onSignIn={()=>{}} onSignOut={onSignOut} lastSync={lastSync}/>
+          <SyncPanel user={sbUser} onSignOut={onSignOut} lastSync={lastSync}/>
 
           <SH label="Backup"/>
           <div style={{background:C.bg,borderRadius:10,padding:"0 14px",marginBottom:4}}>
@@ -1461,27 +1461,36 @@ const loadFromCloud = async (userId) => {
 };
 
 // ── Sync Panel (inside Settings) ──────────────────────────────────────────────
-const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
-  const [email, setEmail]   = useState("");
-  const [sent,  setSent]    = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+const SyncPanel = ({ user, onSignOut, lastSync }) => {
+  const [mode, setMode]         = useState("signin");
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm]   = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [err, setErr]           = useState("");
 
-  const sendMagicLink = async () => {
-    if (!email.trim()) return;
-    if (!sb) { setErr("Cloud sync is not configured. Check Cloudflare environment variables."); return; }
-    setLoading(true);
-    setErr("");
-    const { error } = await sb.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: "https://fitpr.pages.dev/auth-callback" },
-    });
+  const reset = () => { setEmail(""); setPassword(""); setConfirm(""); setErr(""); };
+
+  const signUp = async () => {
+    if (!sb) { setErr("Cloud sync not configured."); return; }
+    if (password.length < 6) { setErr("Password must be at least 6 characters."); return; }
+    if (password !== confirm) { setErr("Passwords don't match."); return; }
+    setLoading(true); setErr("");
+    const { error } = await sb.auth.signUp({ email: email.trim(), password });
     setLoading(false);
-    if (error) { setErr(error.message); }
-    else { setSent(true); }
+    if (error) setErr(error.message);
+    else setErr("✅ Account created! You are now signed in.");
   };
 
-  const signOut = async () => { if(sb) await sb.auth.signOut(); onSignOut(); };
+  const signIn = async () => {
+    if (!sb) { setErr("Cloud sync not configured."); return; }
+    setLoading(true); setErr("");
+    const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+    setLoading(false);
+    if (error) setErr(error.message);
+  };
+
+  const signOut = async () => { if (sb) await sb.auth.signOut(); onSignOut(); };
 
   const fmtSync = ts => {
     if (!ts) return "Never synced";
@@ -1515,32 +1524,35 @@ const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
     </div>
   );
 
-  if (sent) return (
-    <div style={{background:C.bg,borderRadius:10,padding:"16px 14px",textAlign:"center"}}>
-      <div style={{fontSize:28,marginBottom:10}}>📬</div>
-      <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6}}>Check your email</div>
-      <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>A sign-in link was sent to <span style={{color:C.acc,fontWeight:700}}>{email}</span>.</div>
-      <div style={{background:`${C.war}12`,border:`1px solid ${C.war}33`,borderRadius:8,padding:"10px 12px",marginBottom:12,textAlign:"left"}}>
-        <div style={{fontSize:11,color:C.war,fontWeight:800,marginBottom:4}}>📱 iOS tip</div>
-        <div style={{fontSize:10,color:C.mut,lineHeight:1.6}}>Tap the link in your email → it opens in Safari → <span style={{color:C.txt,fontWeight:700}}>then come back to this app and go to Settings → Cloud Sync</span> to complete sign in.</div>
-      </div>
-      <button onClick={()=>{setSent(false);setEmail("");setErr("");}} style={{background:"none",border:"none",color:C.mut,fontSize:11,fontWeight:700,padding:"4px",fontFamily:"inherit"}}>Use a different email</button>
-    </div>
+  const Inp = (placeholder, value, onChange, type="text") => (
+    <input type={type} placeholder={placeholder} value={value}
+      onChange={e=>{onChange(e.target.value);setErr("");}}
+      style={{width:"100%",background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"10px 12px",marginBottom:8,outline:"none",fontFamily:"inherit",transition:"border-color .15s"}}
+      onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr}/>
   );
 
   return (
     <div style={{background:C.bg,borderRadius:10,padding:"12px 14px"}}>
-      <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>Sign in to automatically back up your workouts and PRs to the cloud. One-time sign in — stays signed in forever.</div>
-      <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}}
-        placeholder="your@email.com"
-        onKeyDown={e=>e.key==="Enter"&&sendMagicLink()}
-        style={{width:"100%",background:C.sur,border:`1px solid ${err?C.red:C.bdr}`,borderRadius:8,color:C.txt,padding:"10px 12px",marginBottom:8,outline:"none",fontFamily:"inherit",transition:"border-color .15s"}}
-        onFocus={e=>e.target.style.borderColor=err?C.red:C.acc} onBlur={e=>e.target.style.borderColor=err?C.red:C.bdr}/>
-      {err&&<div style={{fontSize:10,color:C.red,marginBottom:8,lineHeight:1.5}}>{err}</div>}
-      <button onClick={sendMagicLink} disabled={loading||!email.trim()}
-        style={{width:"100%",background:email.trim()?C.acc:"#2a2a36",border:"none",borderRadius:8,color:email.trim()?"#0a0a0c":C.dim,fontSize:13,fontWeight:800,padding:"11px",fontFamily:"inherit",transition:"all .2s",cursor:email.trim()?"pointer":"default"}}>
-        {loading?"Sending…":"Send Sign-In Link"}
+      <div style={{display:"flex",background:C.sur,borderRadius:8,padding:3,marginBottom:14,gap:3}}>
+        {["signin","signup"].map(m=>(
+          <button key={m} onClick={()=>{setMode(m);reset();}}
+            style={{flex:1,background:mode===m?C.acc:"transparent",border:"none",borderRadius:6,color:mode===m?"#0a0a0c":C.mut,fontSize:12,fontWeight:700,padding:"7px",fontFamily:"inherit",transition:"all .15s"}}>
+            {m==="signin"?"Sign In":"Create Account"}
+          </button>
+        ))}
+      </div>
+      {Inp("Email", email, setEmail, "email")}
+      {Inp("Password", password, setPassword, "password")}
+      {mode==="signup"&&Inp("Confirm Password", confirm, setConfirm, "password")}
+      {err&&<div style={{fontSize:11,color:err.startsWith("✅")?C.grn:C.red,marginBottom:8,lineHeight:1.5}}>{err}</div>}
+      <button onClick={mode==="signin"?signIn:signUp}
+        disabled={loading||!email.trim()||!password.trim()}
+        style={{width:"100%",background:email.trim()&&password.trim()?C.acc:"#2a2a36",border:"none",borderRadius:8,color:email.trim()&&password.trim()?"#0a0a0c":C.dim,fontSize:13,fontWeight:800,padding:"11px",fontFamily:"inherit",transition:"all .2s"}}>
+        {loading?"Please wait…":mode==="signin"?"Sign In":"Create Account"}
       </button>
+      <div style={{fontSize:10,color:C.dim,marginTop:10,textAlign:"center"}}>
+        Your data syncs automatically after signing in.
+      </div>
     </div>
   );
 };
