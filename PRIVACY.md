@@ -1,104 +1,153 @@
 # Privacy Policy
 
-**Last updated: May 2025**
+**Last updated: June 2025**
+
+---
 
 ## Overview
 
-FitPR is a privacy-first fitness tracking application. We take your privacy seriously, and this policy explains exactly how your data is handled.
+FitPR is a privacy-first fitness tracking application. This policy explains how your data is handled — both locally on your device and, if you choose to enable it, via optional cloud sync.
 
-**Short version: all your data stays on your device. We collect nothing.**
+**Short version: your data stays on your device by default. Cloud sync is optional and requires you to create an account.**
+
+---
+
+## Two Modes of Use
+
+### Local Only (default — no account required)
+All data is stored exclusively in your browser's `localStorage`. Nothing is transmitted to any server. No account is needed.
+
+### Cloud Sync (optional)
+If you choose to sign in, your workout data is synced to a secure cloud database hosted by Supabase. This requires creating an account with an email address and password.
 
 ---
 
 ## Data We Collect
 
-**None.**
+### Without an account
+**None.** No data is collected, transmitted, or stored on any server.
 
-FitPR does not collect, transmit, store, or share any personal data, usage data, analytics, or identifiers of any kind.
+### With cloud sync enabled
+When you create an account and enable cloud sync, we store:
+
+| Data | Purpose |
+|---|---|
+| Email address | Account identification |
+| Encrypted password | Authentication (handled by Supabase) |
+| Workout data | Cloud backup and sync across devices |
+| PR history | Cloud backup and sync across devices |
+| Weekly goal setting | Cloud backup and sync across devices |
+| Sync timestamps | To track when data was last synced |
+
+We do **not** collect:
+- Location data
+- Health or biometric data beyond what you manually enter
+- Device identifiers
+- Usage analytics or tracking
+- Advertising data
 
 ---
 
 ## Where Your Data Lives
 
-All data you enter into FitPR — including workouts, exercises, sets, reps, loads, session history, and personal records — is stored exclusively in your browser's `localStorage` on your device.
+### Local storage
+All data is stored in your browser's `localStorage` under the key `fitpr_v1`. Backup metadata is stored under `fitpr_backup_meta`.
 
-This means:
+### Cloud storage (if signed in)
+Data is stored in a Supabase PostgreSQL database hosted on AWS infrastructure. Your data is protected by **Row Level Security** — meaning only you can ever read or write your own data, even with database-level access.
 
-- Your data never leaves your device
-- No account or sign-up is required
-- No server ever receives your data
-- No third party ever has access to your data
+Cloud data is stored in the `workouts` table and associated exclusively with your user account via a unique user ID.
 
 ---
 
 ## Third-Party Services
 
-FitPR loads the following resources from third-party CDNs on first load:
-
-| Resource | Provider | Purpose |
+| Service | Purpose | Privacy Policy |
 |---|---|---|
-| React 18 | cdnjs.cloudflare.com | UI framework |
-| Babel Standalone | cdnjs.cloudflare.com | JSX transpilation |
-| DM Mono font | fonts.googleapis.com | Typography |
+| Supabase | Authentication and cloud database | [supabase.com/privacy](https://supabase.com/privacy) |
+| Cloudflare Pages | App hosting and delivery | [cloudflare.com/privacypolicy](https://www.cloudflare.com/privacypolicy/) |
+| cdnjs / jsDelivr | CDN for React, Babel, Supabase libraries | Standard CDN request logs |
+| Google Fonts | DM Mono typography | [policies.google.com/privacy](https://policies.google.com/privacy) |
 
-These requests are standard CDN fetches and do not include any personal data from FitPR. After the first load, the service worker caches these resources so the app works fully offline without further network requests.
+CDN requests are standard browser fetches and include your IP address as part of normal HTTP operation. No personal data from FitPR is passed to CDN providers.
 
-The YouTube "Watch" links in the exercise library open YouTube in a new tab. YouTube's own privacy policy applies to any interactions you have there. FitPR does not pass any user data to YouTube.
+YouTube links in the exercise library open in a new tab. YouTube's own privacy policy applies to any interactions there.
+
+---
+
+## Authentication
+
+Account authentication is handled entirely by Supabase Auth. FitPR never sees or stores your password — it is hashed and managed exclusively by Supabase.
+
+Sessions persist in your browser's `localStorage` so you remain signed in across app restarts. You can sign out at any time from **Settings → Cloud Sync**.
 
 ---
 
 ## Cookies
 
-FitPR does not use cookies.
+FitPR does not use cookies. Supabase stores your session token in `localStorage`, not as a cookie.
 
 ---
 
-## Local Storage
-
-FitPR uses two `localStorage` keys:
+## Local Storage Keys
 
 | Key | Contents |
 |---|---|
-| `fitpr_v1` | Your workouts, sessions, exercises, sets, and PR records |
-| `fitpr_backup_meta` | Your backup settings and last backup timestamp |
+| `fitpr_v1` | Workouts, sessions, exercises, sets, PR records |
+| `fitpr_backup_meta` | Backup settings and last backup timestamp |
+| `fitpr_session_ts` | Active session timer start timestamp |
+| `fitpr_session_wid` | Active session workout ID |
+| `fitpr_last_sync` | Last cloud sync timestamp |
+| `sb-*-auth-token` | Supabase session token (if signed in) |
 
-You can clear this data at any time by:
-- Going to your browser settings → Site data → Clear data for this site
-- Or using your browser's developer tools → Application → Local Storage
+You can clear all local data at any time via:
+- **Settings → Sessions → Clear All Sessions**
+- **Settings → Personal Records → Clear All PRs**
+- Your browser settings → Site data → Clear data for this site
 
 ---
 
-## Backups
+## Data Deletion
 
-When you tap **Backup Now**, FitPR generates a `.json` file and triggers a standard browser download to your device. This file is saved locally on your device — not to any cloud service or server controlled by FitPR. You are responsible for the security of your backup files.
+### Local data
+Cleared immediately when you use the clear options in Settings, or when you clear browser site data.
+
+### Cloud data (if signed in)
+To delete your cloud data, sign out from **Settings → Cloud Sync** and contact us via [GitHub Issues](https://github.com/tinq777/fitpr/issues) to request full account and data deletion. We will process deletion requests within 30 days.
+
+---
+
+## Manual Backup
+
+The manual backup feature downloads a `.json` file to your device. This file is saved locally — not to any cloud service controlled by FitPR. You are responsible for the security of your backup files.
 
 ---
 
 ## Children's Privacy
 
-FitPR does not knowingly collect data from anyone, including children under the age of 13, because it does not collect data from anyone at all.
+FitPR does not knowingly collect data from children under the age of 13. If cloud sync is used, it requires creating an account, which is not intended for children under 13.
 
 ---
 
 ## Changes to This Policy
 
-If this privacy policy changes, the updated version will be published in this repository with an updated date. Since FitPR collects no data, changes are unlikely to affect your privacy in any meaningful way.
+If this privacy policy changes, the updated version will be published in this repository with an updated date. Significant changes affecting how your data is stored or processed will be noted in the app.
 
 ---
 
 ## Contact
 
-FitPR is an open-source project. If you have questions about this privacy policy, please open an issue on the [GitHub repository](https://github.com/tinq777/fitpr).
+FitPR is an open-source project. Questions or data requests can be submitted via [GitHub Issues](https://github.com/tinq777/fitpr/issues).
 
 ---
 
 ## Summary
 
-| Question | Answer |
-|---|---|
-| Do you collect personal data? | No |
-| Do you use analytics? | No |
-| Do you use cookies? | No |
-| Does data leave my device? | No |
-| Do I need an account? | No |
-| Is the source code open? | Yes — MIT licensed |
+| Question | Local Only | With Cloud Sync |
+|---|---|---|
+| Data collected? | None | Email + workout data |
+| Data leaves device? | No | Yes — synced to Supabase |
+| Account required? | No | Yes |
+| Third-party access? | No | Supabase (your data only) |
+| Cookies used? | No | No |
+| Source code open? | Yes — MIT licensed | Yes — MIT licensed |
