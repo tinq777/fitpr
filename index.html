@@ -1369,9 +1369,7 @@ const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessio
           <SH label="App"/>
           <div style={{background:C.bg,borderRadius:10,padding:"0 14px",marginBottom:4}}>
             <Row label="Replay Onboarding" sub="Re-run the welcome guide" right="→" onClick={()=>{onResetOnboarding();onClose();}}/>
-            <Row label="⭐ Star on GitHub" sub="If FitPR is useful, show some love" right="↗" onClick={()=>window.open("https://github.com/tinq777/fitpr","_blank","noopener")}/>
-            <Row label="💬 Submit Feedback" sub="Report a bug or suggest a feature" right="↗" onClick={()=>window.open("https://github.com/tinq777/fitpr/issues/new","_blank","noopener")}/>
-            <Row label="🔒 Privacy Policy" sub="How your data is handled" right="↗" onClick={()=>window.open("https://github.com/tinq777/fitpr/blob/main/PRIVACY.md","_blank","noopener")}/>
+            <Row label="🔒 Privacy Policy" sub="How your data is handled" right="↗" onClick={()=>window.open("https://fitpr.pages.dev/PRIVACY.md","_blank","noopener")}/>
             <Row label="Version" sub="FitPR v1.0 · github.com/tinq777/fitpr"/>
           </div>
         </div>
