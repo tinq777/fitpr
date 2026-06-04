@@ -7,15 +7,6 @@
 //     SUPABASE_URL  = https://rzvdmefztxjnplaowgtr.supabase.co
 //     SUPABASE_ANON = your-anon-key
 
-// functions/config.js
-// Cloudflare Pages Function — serves /config.js at runtime
-// with credentials injected from environment variables (never stored in files).
-//
-// Setup in Cloudflare Pages dashboard:
-//   Settings → Environment Variables → Add:
-//     SUPABASE_URL  = https://rzvdmefztxjnplaowgtr.supabase.co
-//     SUPABASE_ANON = your-anon-key
-
 export async function onRequest(context) {
   const url  = context.env.SUPABASE_URL  || "";
   const anon = context.env.SUPABASE_ANON || "";
