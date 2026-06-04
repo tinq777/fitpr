@@ -62,6 +62,9 @@
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/supabase/2.39.3/umd/supabase.min.js"></script>
+<script src="/config.js"></script>
+<script>if(typeof sb==="undefined")window.sb=null;</script>
 <script type="text/babel">
 const {useState,useEffect,useRef}=React;
 
@@ -1284,7 +1287,7 @@ const SwipeDownHandle=({onClose})=>{
 };
 
 // ── Settings Panel ────────────────────────────────────────────────────────────
-const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessions,onClearAllSessions,onClearPRs,onBackupNow,onSaveBackupFreq,onImport,onResetOnboarding,onClose})=>{
+const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessions,onClearAllSessions,onClearPRs,onBackupNow,onSaveBackupFreq,onImport,onResetOnboarding,onClose,sbUser,onSignOut,lastSync})=>{
   const [confirm,setConfirm]=useState(null);
   const [goalDraft,setGoalDraft]=useState(weeklyGoal);
   const importRef=useRef();
@@ -1329,6 +1332,9 @@ const SettingsPanel=({workouts,prs,weeklyGoal,backupMeta,onSetGoal,onClearSessio
           <div style={{background:C.bg,borderRadius:10,padding:"0 14px",marginBottom:4}}>
             <Row label="Clear All PRs" sub={totPRs>0?`${totPRs} records stored`:"No PRs recorded yet"} right={totPRs>0?"⚠️":null} danger={totPRs>0} onClick={totPRs>0?()=>setConfirm("prs"):null}/>
           </div>
+          <SH label="Cloud Sync"/>
+          <SyncPanel user={sbUser} onSignIn={()=>{}} onSignOut={onSignOut} lastSync={lastSync}/>
+
           <SH label="Backup"/>
           <div style={{background:C.bg,borderRadius:10,padding:"0 14px",marginBottom:4}}>
             <div style={{padding:"12px 0",borderBottom:`1px solid ${C.bdr}`}}>
@@ -1430,6 +1436,100 @@ const Onboarding=({onDone})=>{
   );
 };
 
+// ── Supabase sync helpers ─────────────────────────────────────────────────────
+const syncToCloud = async (userId, workouts, prs, weeklyGoal) => {
+  if(!sb) return;
+  try {
+    const data = { workouts, prs, weeklyGoal, syncedAt: new Date().toISOString() };
+    const { error } = await sb.from("workouts")
+      .upsert({ user_id: userId, data, updated_at: new Date().toISOString() },
+               { onConflict: "user_id" });
+    if (error) console.warn("Sync error:", error.message);
+    else localStorage.setItem("fitpr_last_sync", Date.now().toString());
+  } catch(e) { console.warn("Sync failed:", e); }
+};
+
+const loadFromCloud = async (userId) => {
+  if(!sb) return null;
+  try {
+    const { data, error } = await sb.from("workouts")
+      .select("data").eq("user_id", userId).single();
+    if (error || !data) return null;
+    return data.data;
+  } catch(e) { return null; }
+};
+
+// ── Sync Panel (inside Settings) ──────────────────────────────────────────────
+const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
+  const [email, setEmail]   = useState("");
+  const [sent,  setSent]    = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const sendMagicLink = async () => {
+    if (!email.trim() || !sb) return;
+    setLoading(true);
+    const { error } = await sb.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: "https://fitpr.pages.dev" },
+    });
+    setLoading(false);
+    if (error) { toast("⚠️ " + error.message); }
+    else { setSent(true); }
+  };
+
+  const signOut = async () => { if(sb) await sb.auth.signOut(); onSignOut(); };
+
+  const fmtSync = ts => {
+    if (!ts) return "Never synced";
+    const m = Math.floor((Date.now() - parseInt(ts)) / 60000);
+    if (m < 1) return "Synced just now";
+    if (m < 60) return `Synced ${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `Synced ${h}h ago`;
+    return `Synced ${Math.floor(h / 24)}d ago`;
+  };
+
+  if (user) return (
+    <div style={{background:C.bg,borderRadius:10,padding:"12px 14px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+        <div style={{width:32,height:32,borderRadius:"50%",background:`${C.grn}18`,border:`1px solid ${C.grn}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>✓</div>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{user.email}</div>
+          <div style={{fontSize:10,color:C.grn,marginTop:1}}>{fmtSync(lastSync)}</div>
+        </div>
+      </div>
+      <button onClick={signOut} style={{width:"100%",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:8,color:C.mut,fontSize:12,fontWeight:700,padding:"9px",fontFamily:"inherit",transition:"all .15s"}}
+        onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.mut}>
+        Sign Out
+      </button>
+    </div>
+  );
+
+  if (sent) return (
+    <div style={{background:C.bg,borderRadius:10,padding:"16px 14px",textAlign:"center"}}>
+      <div style={{fontSize:28,marginBottom:10}}>📬</div>
+      <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6}}>Check your email</div>
+      <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>A sign-in link was sent to <span style={{color:C.acc,fontWeight:700}}>{email}</span>. Tap it to sign in — no password needed.</div>
+      <button onClick={()=>{setSent(false);setEmail("");}} style={{background:"none",border:"none",color:C.mut,fontSize:11,fontWeight:700,padding:"4px",fontFamily:"inherit"}}>Use a different email</button>
+    </div>
+  );
+
+  return (
+    <div style={{background:C.bg,borderRadius:10,padding:"12px 14px"}}>
+      <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>Sign in to automatically back up your workouts and PRs to the cloud. One-time sign in — stays signed in forever.</div>
+      <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+        placeholder="your@email.com"
+        onKeyDown={e=>e.key==="Enter"&&sendMagicLink()}
+        style={{width:"100%",background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,padding:"10px 12px",marginBottom:8,outline:"none",fontFamily:"inherit",transition:"border-color .15s"}}
+        onFocus={e=>e.target.style.borderColor=C.acc} onBlur={e=>e.target.style.borderColor=C.bdr}/>
+      <button onClick={sendMagicLink} disabled={loading||!email.trim()}
+        style={{width:"100%",background:email.trim()?C.acc:"#2a2a36",border:"none",borderRadius:8,color:email.trim()?"#0a0a0c":C.dim,fontSize:13,fontWeight:800,padding:"11px",fontFamily:"inherit",transition:"all .2s",cursor:email.trim()?"pointer":"default"}}>
+        {loading?"Sending…":"Send Sign-In Link"}
+      </button>
+    </div>
+  );
+};
+
 // ── App ───────────────────────────────────────────────────────────────────────
 function App(){
   const init=initState();
@@ -1443,6 +1543,50 @@ function App(){
   const [backupReminder,setBackupReminder]=useState(false);
   const [backupPanel,setBackupPanel]=useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
+  // ── Supabase auth state ────────────────────────────────────────────────────
+  const [sbUser,setSbUser]=useState(null);
+  const [lastSync,setLastSync]=useState(()=>localStorage.getItem("fitpr_last_sync"));
+  const syncDebounce=useRef(null);
+
+  // Listen for auth state changes (magic link return, session restore)
+  useEffect(()=>{
+    if(!sb)return;
+    sb.auth.getSession().then(({data:{session}})=>{
+      if(session?.user) setSbUser(session.user);
+    });
+    const{data:{subscription}}=sb.auth.onAuthStateChange(async(_event,session)=>{
+      const user=session?.user||null;
+      setSbUser(user);
+      if(user) setBackupReminder(false); // cloud sync covers backup
+      if(user){
+        // On sign-in, pull cloud data and merge if local is empty
+        const cloud=await loadFromCloud(user.id);
+        if(cloud&&cloud.workouts){
+          const local=load();
+          const localHasData=local&&local.workouts&&local.workouts.some(w=>w.sessions.length>0);
+          if(!localHasData){
+            setWorkouts(cloud.workouts);
+            if(cloud.prs)   setPrs(cloud.prs);
+            if(cloud.weeklyGoal) setWeeklyGoal(cloud.weeklyGoal);
+            toast("☁️ Data restored from cloud");
+          }
+        }
+      }
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  // Auto-sync to cloud whenever data changes (debounced 3s)
+  useEffect(()=>{
+    if(!sbUser)return;
+    clearTimeout(syncDebounce.current);
+    syncDebounce.current=setTimeout(async()=>{
+      await syncToCloud(sbUser.id,workouts,prs,weeklyGoal);
+      setLastSync(Date.now().toString());
+      localStorage.setItem("fitpr_last_sync",Date.now().toString());
+    },3000);
+    return()=>clearTimeout(syncDebounce.current);
+  },[workouts,prs,weeklyGoal,sbUser]);
   // Global session timer — survives app backgrounding via localStorage + visibilitychange
   const TIMER_KEY="fitpr_session_ts";
   const [timerActive,setTimerActive]=useState(()=>{
@@ -1508,7 +1652,14 @@ function App(){
   useEffect(()=>{save({workouts,tab,prs,weeklyGoal,onboarded});},[workouts,tab,prs,weeklyGoal,onboarded]);
 
   useEffect(()=>{
-    const check=()=>{const{lastBackup,frequency}=backupMeta;if(frequency===0)return;if(!lastBackup){setBackupReminder(true);return;}const days=(Date.now()-lastBackup)/(1000*60*60*24);setBackupReminder(days>=frequency);};
+    const check=()=>{
+      if(sbUser)return; // cloud sync active — no reminder needed
+      const{lastBackup,frequency}=backupMeta;
+      if(frequency===0)return;
+      if(!lastBackup){setBackupReminder(true);return;}
+      const days=(Date.now()-lastBackup)/(1000*60*60*24);
+      setBackupReminder(days>=frequency);
+    };
     check();const t=setInterval(check,60*60*1000);return()=>clearInterval(t);
   },[backupMeta]);
 
@@ -1581,7 +1732,7 @@ function App(){
   const active=workouts.find(w=>w.id===tab);
   const totSess=workouts.reduce((a,w)=>a+w.sessions.length,0);
   const slideStyle={animation:slideDir!==0?`slide-in-${slideDir<0?"left":"right"} 0.28s cubic-bezier(.25,.46,.45,.94) both`:"none"};
-  const bkSt=bkpStatus(backupMeta.lastBackup);
+  const bkSt=sbUser?{color:C.grn,label:"☁️ Cloud sync active"}:bkpStatus(backupMeta.lastBackup);
 
   return(
     <div style={{background:C.bg,minHeight:"100vh",fontFamily:"'DM Mono','Courier New',monospace",color:C.txt}}>
@@ -1591,9 +1742,9 @@ function App(){
         @keyframes slide-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
       {!onboarded&&<Onboarding onDone={()=>setOnboarded(true)}/>}
-      {settingsOpen&&<SettingsPanel workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} backupMeta={backupMeta} onSetGoal={setWeeklyGoal} onClearSessions={clearSessions} onClearAllSessions={clearAllSessions} onClearPRs={clearPRs} onBackupNow={()=>{doBackup();}} onSaveBackupFreq={saveBackupFreq} onImport={importBackup} onResetOnboarding={()=>setOnboarded(false)} onClose={()=>setSettingsOpen(false)}/>}
+      {settingsOpen&&<SettingsPanel workouts={workouts} prs={prs} weeklyGoal={weeklyGoal} backupMeta={backupMeta} onSetGoal={setWeeklyGoal} onClearSessions={clearSessions} onClearAllSessions={clearAllSessions} onClearPRs={clearPRs} onBackupNow={()=>{doBackup();}} onSaveBackupFreq={saveBackupFreq} onImport={importBackup} onResetOnboarding={()=>setOnboarded(false)} onClose={()=>setSettingsOpen(false)} sbUser={sbUser} onSignOut={()=>setSbUser(null)} lastSync={lastSync}/>}
       {backupPanel&&<BackupPanel meta={backupMeta} onBackupNow={()=>{doBackup();setBackupPanel(false);}} onSaveFreq={saveBackupFreq} onClose={()=>setBackupPanel(false)}/>}
-      {backupReminder&&(
+      {backupReminder&&!sbUser&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:1500,background:"#18181d",borderTop:`1px solid ${C.war}55`,padding:"12px 18px 28px",display:"flex",alignItems:"center",gap:12,animation:"slide-up .3s ease both"}}>
           <span style={{fontSize:20,flexShrink:0}}>💾</span>
           <div style={{flex:1}}><div style={{fontSize:12,fontWeight:800,color:C.txt}}>Backup reminder</div><div style={{fontSize:10,color:C.mut,marginTop:2}}>{backupMeta.lastBackup?`Last backup was ${Math.floor((Date.now()-backupMeta.lastBackup)/(1000*60*60*24))} days ago`:"You haven't backed up yet"}</div></div>
@@ -1622,6 +1773,12 @@ function App(){
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.acc} strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span style={{fontSize:11,fontWeight:800,color:C.acc,letterSpacing:.5,fontVariantNumeric:"tabular-nums"}}>{fmtSecs(timerElapsed)}</span>
             </button>
+          )}
+          {sbUser&&(
+            <div title="Cloud sync active" style={{display:"flex",alignItems:"center",gap:4,background:`${C.grn}12`,border:`1px solid ${C.grn}33`,borderRadius:20,padding:"3px 8px",flexShrink:0}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:C.grn,boxShadow:`0 0 5px ${C.grn}88`}}/>
+              <span style={{fontSize:9,fontWeight:700,color:C.grn,letterSpacing:.5}}>SYNCED</span>
+            </div>
           )}
           <button onClick={()=>setSettingsOpen(true)} title="Settings" style={{background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.mut,transition:"all .15s",flexShrink:0}} onMouseEnter={e=>{e.currentTarget.style.borderColor=C.acc;e.currentTarget.style.color=C.acc;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut;}}>{I.gear}</button>
           <button onClick={()=>setBackupPanel(true)} title="Backup" style={{position:"relative",background:C.sur,border:`1px solid ${C.bdr}`,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.mut,transition:"all .15s",flexShrink:0}} onMouseEnter={e=>{e.currentTarget.style.borderColor=bkSt.color;e.currentTarget.style.color=bkSt.color;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.color=C.mut;}}>
