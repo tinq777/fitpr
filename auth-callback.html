@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Signing in to FitPR…</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,sans-serif;background:#0a0a0c;color:#f0f0f5;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+    .card{background:#111114;border:1px solid #1e1e26;border-radius:16px;padding:32px 24px;max-width:320px;width:100%}
+    .icon{font-size:48px;margin-bottom:16px}
+    h1{font-size:18px;font-weight:700;margin-bottom:8px}
+    p{font-size:13px;color:#6b6b7e;line-height:1.6;margin-bottom:20px}
+    .btn{display:inline-block;background:#c8f542;color:#0a0a0c;font-weight:800;font-size:14px;padding:12px 24px;border-radius:10px;text-decoration:none;border:none;cursor:pointer;font-family:inherit;width:100%}
+    .spinner{width:32px;height:32px;border:3px solid #1e1e26;border-top-color:#c8f542;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="content">
+      <div class="spinner"></div>
+      <h1>Signing you in…</h1>
+      <p>Please wait while we verify your link.</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/supabase-config"></script>
+  <script>
+    (async function() {
+      const content = document.getElementById('content');
+
+      // Parse the hash/query from the magic link
+      const hash   = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash || window.location.search);
+
+      const accessToken  = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (!accessToken || !window.sb) {
+        content.innerHTML = `
+          <div class="icon">⚠️</div>
+          <h1>Link expired or invalid</h1>
+          <p>This sign-in link has expired or already been used. Please request a new one from the app.</p>
+          <a class="btn" href="/">Back to FitPR</a>
+        `;
+        return;
+      }
+
+      try {
+        // Set the session using the tokens from the magic link
+        const { error } = await window.sb.auth.setSession({
+          access_token:  accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) throw error;
+
+        // Store tokens in localStorage so the PWA picks them up
+        const sessionKey = 'sb-rzvdmefztxjnplaowgtr-auth-token';
+        const existing   = JSON.parse(localStorage.getItem(sessionKey) || '{}');
+        existing.access_token  = accessToken;
+        existing.refresh_token = refreshToken;
+        localStorage.setItem(sessionKey, JSON.stringify(existing));
+
+        content.innerHTML = `
+          <div class="icon">✅</div>
+          <h1>Signed in!</h1>
+          <p>You're now signed in. Open FitPR from your home screen — your data will sync automatically.</p>
+          <a class="btn" href="/">Open FitPR</a>
+        `;
+
+        // Auto-redirect after 2s
+        setTimeout(() => { window.location.href = '/'; }, 2000);
+
+      } catch(e) {
+        content.innerHTML = `
+          <div class="icon">❌</div>
+          <h1>Something went wrong</h1>
+          <p>${e.message || 'Please try signing in again from the app.'}</p>
+          <a class="btn" href="/">Back to FitPR</a>
+        `;
+      }
+    })();
+  </script>
+</body>
+</html>

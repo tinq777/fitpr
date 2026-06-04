@@ -1474,7 +1474,7 @@ const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
     setErr("");
     const { error } = await sb.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: "https://fitpr.pages.dev" },
+      options: { emailRedirectTo: "https://fitpr.pages.dev/auth-callback" },
     });
     setLoading(false);
     if (error) { setErr(error.message); }
@@ -1519,7 +1519,11 @@ const SyncPanel = ({ user, onSignIn, onSignOut, lastSync }) => {
     <div style={{background:C.bg,borderRadius:10,padding:"16px 14px",textAlign:"center"}}>
       <div style={{fontSize:28,marginBottom:10}}>📬</div>
       <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6}}>Check your email</div>
-      <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>A sign-in link was sent to <span style={{color:C.acc,fontWeight:700}}>{email}</span>. Tap it to sign in — no password needed.</div>
+      <div style={{fontSize:11,color:C.mut,lineHeight:1.6,marginBottom:12}}>A sign-in link was sent to <span style={{color:C.acc,fontWeight:700}}>{email}</span>.</div>
+      <div style={{background:`${C.war}12`,border:`1px solid ${C.war}33`,borderRadius:8,padding:"10px 12px",marginBottom:12,textAlign:"left"}}>
+        <div style={{fontSize:11,color:C.war,fontWeight:800,marginBottom:4}}>📱 iOS tip</div>
+        <div style={{fontSize:10,color:C.mut,lineHeight:1.6}}>Tap the link in your email → it opens in Safari → <span style={{color:C.txt,fontWeight:700}}>then come back to this app and go to Settings → Cloud Sync</span> to complete sign in.</div>
+      </div>
       <button onClick={()=>{setSent(false);setEmail("");setErr("");}} style={{background:"none",border:"none",color:C.mut,fontSize:11,fontWeight:700,padding:"4px",fontFamily:"inherit"}}>Use a different email</button>
     </div>
   );
@@ -1562,15 +1566,30 @@ function App(){
   // Listen for auth state changes (magic link return, session restore)
   useEffect(()=>{
     if(!sb)return;
+    // Handle magic link return — Supabase puts tokens in URL hash
+    // This handles both Safari redirect AND PWA opening with hash
+    const hash=window.location.hash;
+    if(hash&&hash.includes('access_token')){
+      // Let Supabase process the hash tokens automatically
+      setTimeout(()=>{
+        sb.auth.getSession().then(({data:{session}})=>{
+          if(session?.user){
+            setSbUser(session.user);
+            setBackupReminder(false);
+            window.history.replaceState(null,'',window.location.pathname);
+            toast("☁️ Signed in successfully");
+          }
+        });
+      },500);
+    }
     sb.auth.getSession().then(({data:{session}})=>{
       if(session?.user) setSbUser(session.user);
     });
     const{data:{subscription}}=sb.auth.onAuthStateChange(async(_event,session)=>{
       const user=session?.user||null;
       setSbUser(user);
-      if(user) setBackupReminder(false); // cloud sync covers backup
+      if(user) setBackupReminder(false);
       if(user){
-        // On sign-in, pull cloud data and merge if local is empty
         const cloud=await loadFromCloud(user.id);
         if(cloud&&cloud.workouts){
           const local=load();
